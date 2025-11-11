@@ -1,4 +1,6 @@
-export type Result<T, E> = Success<T> | Failure<E>;
+import { Exception } from "../errors/types";
+
+export type Result<T, E = Exception> = Success<T> | Failure<E>;
 
 export type Success<T> = {
   readonly _tag: "Success";
@@ -55,3 +57,5 @@ export const failure = <E>(error: E): Failure<E> => ({
     return handlers.onFailure(error);
   },
 });
+
+
