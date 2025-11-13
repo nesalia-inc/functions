@@ -21,10 +21,11 @@ export type Query<
   TArgs extends ZodType = ZodType,
   TError extends Exception = Exception,
   TOutput = Unit,
+  TContext = {}
 > = (options: {
   args: TArgs;
-  handler: (args: z.infer<TArgs>) => AsyncResult<TOutput, TError>;
-}) => (args: z.infer<TArgs>) => AsyncResult<TOutput, TError>;
+  handler: (args: z.infer<TArgs>, ctx: TContext) => AsyncResult<TOutput, TError>;
+}) => (args: z.infer<TArgs>, ctx: TContext) => AsyncResult<TOutput, TError>;
 
 
 export type Mutation<

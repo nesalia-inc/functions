@@ -1,1 +1,1 @@
-export type Context = {};
+export type Context = Record<string, unknown>;
