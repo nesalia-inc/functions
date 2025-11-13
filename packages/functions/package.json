@@ -1,16 +1,98 @@
 {
-  "name": "@deessejs/functions",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "packageManager": "pnpm@10.11.1",
-  "dependencies": {
-    "zod": "^4.1.12"
-  }
+    "name": "@deessejs/functions",
+    "version": "0.0.3",
+    "description": "A powerful utility library for building type-safe APIs and functions with context management",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "module": "dist/index.esm.js",
+    "exports": {
+        ".": {
+            "import": "./dist/index.esm.js",
+            "require": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+        },
+        "./api": {
+            "import": "./dist/api.esm.js",
+            "require": "./dist/api.js",
+            "types": "./dist/api.d.ts"
+        },
+        "./checks": {
+            "import": "./dist/checks.esm.js",
+            "require": "./dist/checks.js",
+            "types": "./dist/checks.d.ts"
+        },
+        "./context": {
+            "import": "./dist/context.esm.js",
+            "require": "./dist/context.js",
+            "types": "./dist/context.d.ts"
+        },
+        "./errors": {
+            "import": "./dist/errors.esm.js",
+            "require": "./dist/errors.js",
+            "types": "./dist/errors.d.ts"
+        },
+        "./events": {
+            "import": "./dist/events.esm.js",
+            "require": "./dist/events.js",
+            "types": "./dist/events.d.ts"
+        },
+        "./functions": {
+            "import": "./dist/functions.esm.js",
+            "require": "./dist/functions.js",
+            "types": "./dist/functions.d.ts"
+        },
+        "./types": {
+            "import": "./dist/types.esm.js",
+            "require": "./dist/types.js",
+            "types": "./dist/types.d.ts"
+        }
+    },
+    "files": [
+        "dist/**/*",
+        "README.md",
+        "LICENSE"
+    ],
+    "scripts": {
+        "build": "tsc",
+        "build:watch": "tsc --watch",
+        "prepublishOnly": "npm run build",
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "lint": "eslint src --ext .ts",
+        "lint:fix": "eslint src --ext .ts --fix"
+    },
+    "keywords": [
+        "typescript",
+        "api",
+        "functions",
+        "context",
+        "validation",
+        "zod",
+        "type-safe",
+        "utility"
+    ],
+    "author": "Votre Nom",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/votre-organisation/deesse-api.git",
+        "directory": "packages/functions"
+    },
+    "bugs": {
+        "url": "https://github.com/votre-organisation/deesse-api/issues"
+    },
+    "homepage": "https://github.com/votre-organisation/deesse-api#readme",
+    "engines": {
+        "node": ">=16.0.0"
+    },
+    "packageManager": "pnpm@10.11.1",
+    "dependencies": {
+        "zod": "^4.1.12"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+        "eslint": "^8.0.0",
+        "@typescript-eslint/eslint-plugin": "^6.0.0",
+        "@typescript-eslint/parser": "^6.0.0"
+    }
 }

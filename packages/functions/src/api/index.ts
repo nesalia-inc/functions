@@ -19,12 +19,3 @@ export const createAPI = <TContext extends Record<string, unknown>>(
 
   return api;
 };
-
-
-const api = createAPI({
-  context: { user: "John Doe" },
-  commands: [],
-  events: [],
-});
-
-export default api;
