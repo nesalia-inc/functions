@@ -1,21 +1,40 @@
-import { API, APIConfig } from "./types";
+// @deessejs/functions/index.ts
+import z, { ZodType } from "zod";
+import { AppContext } from "../context/typing";
+import { query as queryFunction } from "../functions/query";
+import type { AsyncResult } from "../types";
+import { Exception } from "../errors/types";
 
-export const createAPI = <TContext extends Record<string, unknown>>(
-  config: APIConfig<TContext>
-): API<TContext> => {
-  let context = { ...config.context } as TContext;
+type QueryFn<TArgs, TOutput, TError> = (
+  input: TArgs,
+) => Promise<AsyncResult<TOutput, TError>>;
 
-  const addContext = <K extends string, V>(key: K, value: V) => {
-    context = { ...context, [key]: value } as TContext & Record<K, V>;
-    return api as unknown as API<TContext & Record<K, V>>;
+export const createAPI = <TContext extends Record<string, unknown>>(config: {
+  context: TContext;
+}) => {
+  const ctx = { ...config.context } as TContext;
+
+  // API interne (on va y attacher les queries)
+  const api = { context: ctx } as {
+    context: TContext;
+    [key: string]: QueryFn<any, any, any> | TContext;
+  };
+  
+  const query = <TContext extends AppContext = AppContext>() => {
+    return <
+      TArgs extends ZodType<any, any, any>,
+      TOutput,
+      TError extends Exception = Exception,
+    >(options: {
+      args: TArgs;
+      handler: (args: z.infer<TArgs>, ctx: TContext) => AsyncResult<TOutput, TError>;
+    }) => {
+      return queryFunction<TArgs, TOutput, TError, TContext>(options);
+    };
   };
 
-  const api: API<TContext> = {
-    context,
-    addContext,
-    commands: config.commands,
-    events: config.events,
-  };
-
-  return api;
+  return {
+    ...api,
+    query,
+  } as const;
 };

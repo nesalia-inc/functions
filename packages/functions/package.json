@@ -1,6 +1,6 @@
 {
     "name": "@deessejs/functions",
-    "version": "0.0.3",
+    "version": "0.0.6",
     "description": "A powerful utility library for building type-safe APIs and functions with context management",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",

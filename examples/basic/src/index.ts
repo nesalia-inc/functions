@@ -1,17 +1,25 @@
-import { AsyncResult, query, success, createAPI } from "@deessejs/functions";
+import { AsyncResult, createAPI, query, success } from "@deessejs/functions";
 import { z } from "zod";
 
-const api = createAPI
+const context = {
+  user: {
+    id: "123",
+    email: "user@example.com",
+  },
+} as const;
 
-export const double = query({
+const config = { context, a: { user: context.user } };
+
+const api = createAPI(config);
+
+export const double = api.query({
   args: z.object({
     number: z.number().min(0).max(100),
   }),
   handler: async (args, ctx): AsyncResult<number, never> => {
+    ctx.user.id; // Strongly typed: string (or literal "123" via 'as const')
     return success(args.number * 2);
   },
 });
 
-
-const value = await double({ number: 42 });
-
+console.log(api.double({ number: 5 }));
