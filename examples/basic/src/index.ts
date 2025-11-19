@@ -1,4 +1,4 @@
-import { AsyncResult, createAPI, query, success } from "@deessejs/functions";
+import { AsyncResult, createAPI, success } from "@deessejs/functions";
 import { z } from "zod";
 
 const context = {
@@ -13,6 +13,7 @@ const config = { context, a: { user: context.user } };
 const api = createAPI(config);
 
 export const double = api.query({
+  name: "double",
   args: z.object({
     number: z.number().min(0).max(100),
   }),
@@ -22,4 +23,4 @@ export const double = api.query({
   },
 });
 
-console.log(api.double({ number: 5 }));
+console.log(api.efeef({ number: 5 }));

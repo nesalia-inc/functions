@@ -9,16 +9,16 @@ importers:
   .:
     dependencies:
       '@deessejs/functions':
-        specifier: ^0.0.6
-        version: 0.0.6
+        specifier: ^0.0.11
+        version: 0.0.11
       zod:
         specifier: ^4.1.12
         version: 4.1.12
 
 packages:
 
-  '@deessejs/functions@0.0.6':
-    resolution: {integrity: sha512-y4XI33q3bi6EYufSLU5Yqi1j9bnRdlOVedyzSII4M1gX240i1GXKL52X8wQsAf6YKf99qKHt50cTh0R3gBb+Eg==}
+  '@deessejs/functions@0.0.11':
+    resolution: {integrity: sha512-5eA0+kMncHFtmXeiMLhpbEgDarSY6F2iCWWAYCrJv2VOF5orwBtP79cgaQr2nT2Dd2uOIyczksECM1BP64KVOg==}
     engines: {node: '>=16.0.0'}
 
   zod@4.1.12:
@@ -26,7 +26,7 @@ packages:
 
 snapshots:
 
-  '@deessejs/functions@0.0.6':
+  '@deessejs/functions@0.0.11':
     dependencies:
       zod: 4.1.12
 
