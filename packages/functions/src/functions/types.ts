@@ -28,16 +28,13 @@ export type GroupFromConfig<C extends CommandGroupConfig> = { name: C["name"] } 
   > as K["name"]]: GroupFromConfig<K>;
 };
 
-type ChildrenToMap<T extends readonly (Command | CommandGroupConfig)[]> = {
-  [G in IsGroup<T[number]> as G["name"]]: GroupFromConfig<G>;
-};
-
 export type Query<
   TArgs extends ZodType = ZodType,
   TError extends Exception = Exception,
   TOutput = Unit,
   TContext = {},
 > = (options: {
+  name: string;
   args: TArgs;
   handler: (
     args: z.infer<TArgs>,

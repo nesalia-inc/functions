@@ -1,19 +1,21 @@
-import { Command } from "../functions/types";
-import { Event } from "../events/types";
-import { Context } from "../context/types";
+import z, { ZodType } from "zod";
+import { QueryDefinition } from "../context/define";
+import { AsyncResult } from "../types";
 
-export type APIConfig<TContext extends Context = Context> = {
-  context: TContext;
-  commands: Command[];
-  events: Event[];
-};
+type InferQueryFn<T> =
+  T extends QueryDefinition<
+    any, 
+    infer TArgs extends ZodType<any, any, any>,
+    infer TOutput,
+    infer TError 
+  >
+    ? (input: z.input<TArgs>) => AsyncResult<TOutput, TError>
+    : never;
 
-export type API<TContext extends Context = Context> = {
-  context: TContext;
-  addContext: <K extends string, V>(
-    key: K,
-    value: V,
-  ) => API<TContext & Record<K, V>>;
-  commands: Command[];
-  events: Event[];
+export type ApiRouter<T> = {
+  [K in keyof T]: T[K] extends QueryDefinition<any, any, any, any>
+    ? InferQueryFn<T[K]>
+    : T[K] extends Record<string, any>
+      ? ApiRouter<T[K]>
+      : never;
 };

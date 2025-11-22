@@ -3,7 +3,6 @@ import { exception } from "../errors";
 import { Exception } from "../errors/types";
 import { AsyncResult, failure } from "../types";
 import { parseArgs } from "./parse";
-import type { AppContext } from "../context/typing";
 
 // Mutation functions do not accept context to avoid side effects
 // They remain pure and focused on state modification
@@ -36,7 +35,9 @@ export function mutation<
 }
 
 // Mutation builder for consistency with query builder
-export const createMutation = <TContext extends AppContext = AppContext>() => {
+export const createMutation = <
+  TContext extends Record<string, unknown> = Record<string, unknown>,
+>() => {
   return <
     TArgs extends ZodType<any, any, any>,
     TOutput,
@@ -54,10 +55,13 @@ export function mutationWithContext<
   TArgs extends ZodType<any, any, any>,
   TOutput,
   TError extends Exception = Exception,
-  TContext extends AppContext = AppContext,
+  TContext extends Record<string, unknown> = Record<string, unknown>,
 >(options: {
   args: TArgs;
-  handler: (args: z.infer<TArgs>, ctx: TContext) => AsyncResult<TOutput, TError>;
+  handler: (
+    args: z.infer<TArgs>,
+    ctx: TContext,
+  ) => AsyncResult<TOutput, TError>;
 }) {
   type Input = z.infer<TArgs>;
 
@@ -67,7 +71,7 @@ export function mutationWithContext<
     return parsed.match({
       onSuccess: (data: z.infer<TArgs>) => {
         // Use provided context or get from global context
-        const ctx = context ?? (globalThis as any).__context as TContext;
+        const ctx = context ?? ((globalThis as any).__context as TContext);
         return options.handler(data, ctx);
       },
       onFailure: (error: Exception) => {

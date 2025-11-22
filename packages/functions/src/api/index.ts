@@ -1,40 +1,46 @@
-// @deessejs/functions/index.ts
-import z, { ZodType } from "zod";
-import { AppContext } from "../context/typing";
-import { query as queryFunction } from "../functions/query";
-import type { AsyncResult } from "../types";
-import { Exception } from "../errors/types";
+import { QueryDefinition } from "../context/define";
 
-type QueryFn<TArgs, TOutput, TError> = (
-  input: TArgs,
-) => Promise<AsyncResult<TOutput, TError>>;
+import { exception } from "../errors";
+import { parseArgs } from "../functions/parse";
+import { failure } from "../types";
+import { ApiRouter } from "./types";
 
-export const createAPI = <TContext extends Record<string, unknown>>(config: {
-  context: TContext;
-}) => {
-  const ctx = { ...config.context } as TContext;
+export function createAPI<
+  TCtx extends Record<string, unknown>,
+  TRoot extends Record<string, any>,
+>(config: { context: TCtx; root: TRoot }): ApiRouter<TRoot> {
+  const hydrate = (node: any): any => {
+    if (node && typeof node === "object" && node._type === "query") {
+      const def = node as QueryDefinition<any, any, any, any>;
 
-  // API interne (on va y attacher les queries)
-  const api = { context: ctx } as {
-    context: TContext;
-    [key: string]: QueryFn<any, any, any> | TContext;
+      return (input: any) => {
+        const parsed = parseArgs(def.args, input);
+
+        return parsed.match({
+          onSuccess: (data) => {
+            return def.handler(data, config.context);
+          },
+          onFailure: (error) => {
+            const ValidationError = exception({
+              name: "ValidationError",
+              message: error.message,
+            });
+            return Promise.resolve(failure(ValidationError));
+          },
+        });
+      };
+    }
+
+    if (node && typeof node === "object") {
+      const group: any = {};
+      for (const key in node) {
+        group[key] = hydrate(node[key]);
+      }
+      return group;
+    }
+
+    return node;
   };
-  
-  const query = <TContext extends AppContext = AppContext>() => {
-    return <
-      TArgs extends ZodType<any, any, any>,
-      TOutput,
-      TError extends Exception = Exception,
-    >(options: {
-      args: TArgs;
-      handler: (args: z.infer<TArgs>, ctx: TContext) => AsyncResult<TOutput, TError>;
-    }) => {
-      return queryFunction<TArgs, TOutput, TError, TContext>(options);
-    };
-  };
 
-  return {
-    ...api,
-    query,
-  } as const;
-};
+  return hydrate(config.root);
+}

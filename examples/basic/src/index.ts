@@ -1,26 +1,48 @@
-import { AsyncResult, createAPI, success } from "@deessejs/functions";
+import { createAPI, defineContext, success } from "@deessejs/functions";
 import { z } from "zod";
 
 const context = {
-  user: {
-    id: "123",
-    email: "user@example.com",
-  },
-} as const;
+  user: { id: "123", email: "admin@deesse.art" },
+};
 
-const config = { context, a: { user: context.user } };
+// On définit le "t" avec le type du contexte
+const t = defineContext<typeof context>();
 
-const api = createAPI(config);
-
-export const double = api.query({
+// Une query isolée
+const double = t.query({
   name: "double",
-  args: z.object({
-    number: z.number().min(0).max(100),
-  }),
-  handler: async (args, ctx): AsyncResult<number, never> => {
-    ctx.user.id; // Strongly typed: string (or literal "123" via 'as const')
-    return success(args.number * 2);
+  args: z.object({ val: z.number() }),
+  handler: async ({ val }, ctx) => {
+    // ctx est typé !
+    ctx.user
+    return success(val * 2);
   },
 });
 
-console.log(api.efeef({ number: 5 }));
+// Un groupe auth
+const authQueries = t.group({
+  login: t.query({
+    name: "login",
+    args: z.object({
+      /*...*/
+    }),
+    handler: async (args, ctx) => success(true),
+  }),
+});
+
+
+const api = createAPI({
+  context, // Le vrai objet contexte
+  root: {
+    double, // A la racine
+    auth: authQueries, // Dans un sous-groupe
+  },
+});
+
+// --- 3. Utilisation ---
+
+// Type safe : api.double prend { val: number }
+const res1 = await api.double({ val: 21 });
+
+// Nested : api.auth.login
+const res2 = await api.auth.login({});
