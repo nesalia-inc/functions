@@ -1,4 +1,4 @@
-import { QueryDefinition } from "../context/define";
+import { CommandsDefinition } from "../context/types";
 
 import { exception } from "../errors";
 import { parseArgs } from "../functions/parse";
@@ -10,8 +10,12 @@ export function createAPI<
   TRoot extends Record<string, any>,
 >(config: { context: TCtx; root: TRoot }): ApiRouter<TRoot> {
   const hydrate = (node: any): any => {
-    if (node && typeof node === "object" && node._type === "query") {
-      const def = node as QueryDefinition<any, any, any, any>;
+    if (
+      node &&
+      typeof node === "object" &&
+      (node._type === "query" || node._type === "mutation")
+    ) {
+      const def = node as CommandsDefinition;
 
       return (input: any) => {
         const parsed = parseArgs(def.args, input);

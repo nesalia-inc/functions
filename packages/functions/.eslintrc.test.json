@@ -1,0 +1,33 @@
+{
+  "extends": [
+    "eslint:recommended",
+    "@typescript-eslint/recommended"
+  ],
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint"],
+  "env": {
+    "vitest": true,
+    "browser": false,
+    "node": true
+  },
+  "rules": {
+    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+    "@typescript-eslint/no-explicit-any": "warn",
+    "vitest/consistent-test-it": ["error", { "fn": "it", "withinDescribe": "it" }],
+    "vitest/valid-expect": "error",
+    "vitest/expect-expect": "error",
+    "vitest/no-commented-out-tests": "error",
+    "vitest/no-identical-title": "error",
+    "vitest/prefer-each": "error",
+    "vitest/prefer-to-have-length": "warn",
+    "vitest/valid-title": "error"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.{ts,js}"],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "off"
+      }
+    }
+  ]
+}
