@@ -100,6 +100,7 @@
         "@types/sinon": "^21.0.0",
         "@typescript-eslint/eslint-plugin": "^6.0.0",
         "@typescript-eslint/parser": "^6.0.0",
+        "@vitest/coverage-istanbul": "^4.0.14",
         "@vitest/coverage-v8": "^4.0.13",
         "@vitest/ui": "^4.0.13",
         "eslint": "^8.0.0",
