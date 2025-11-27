@@ -21,15 +21,13 @@ export type IsGroup<T> = T extends {
   ? T
   : never;
 
-export type GroupFromConfig<C extends CommandGroupConfig> = { name: C["name"] } & {
+export type GroupFromConfig<C extends CommandGroupConfig> = {
+  name: C["name"];
+} & {
   [K in Extract<
     C["children"][number],
     CommandGroupConfig
   > as K["name"]]: GroupFromConfig<K>;
-};
-
-type ChildrenToMap<T extends readonly (Command | CommandGroupConfig)[]> = {
-  [G in IsGroup<T[number]> as G["name"]]: GroupFromConfig<G>;
 };
 
 export type Query<
@@ -38,6 +36,7 @@ export type Query<
   TOutput = Unit,
   TContext = {},
 > = (options: {
+  name: string;
   args: TArgs;
   handler: (
     args: z.infer<TArgs>,
@@ -49,7 +48,12 @@ export type Mutation<
   TArgs extends ZodType = ZodType,
   TError extends Exception = Exception,
   TOutput = Unit,
+  TContext = {},
 > = (options: {
+  name: string;
   args: TArgs;
-  handler: (args: z.infer<TArgs>) => AsyncResult<TOutput, TError>;
-}) => (args: z.infer<TArgs>) => AsyncResult<TOutput, TError>;
+  handler: (
+    args: z.infer<TArgs>,
+    ctx: TContext,
+  ) => AsyncResult<TOutput, TError>;
+}) => (args: z.infer<TArgs>, ctx: TContext) => AsyncResult<TOutput, TError>;

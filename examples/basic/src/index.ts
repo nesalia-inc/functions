@@ -1,26 +1,32 @@
-import { AsyncResult, createAPI, success } from "@deessejs/functions";
-import { z } from "zod";
+import { success } from "@deessejs/functions";
+import { defineContext, rpc } from "@deessejs/functions";
+import z from "zod";
 
-const context = {
-  user: {
-    id: "123",
-    email: "user@example.com",
-  },
-} as const;
 
-const config = { context, a: { user: context.user } };
+const context = { userId: "123" };
 
-const api = createAPI(config);
+const { t, createAPI } = defineContext(context).withExtensions([
+  rpc
+]);
 
-export const double = api.query({
-  name: "double",
-  args: z.object({
-    number: z.number().min(0).max(100),
-  }),
-  handler: async (args, ctx): AsyncResult<number, never> => {
-    ctx.user.id; // Strongly typed: string (or literal "123" via 'as const')
-    return success(args.number * 2);
+// Définition
+const createUser = t.mutation({
+  args: z.object({ name: z.string() }),
+  handler: async (ctx, args) => {
+    return success({ id: 1, name: args.name });
   },
 });
 
-console.log(api.efeef({ number: 5 }));
+// API
+const api = createAPI({
+  root: t.router({ auth: t.router({ createUser }) }),
+});
+
+// Run
+const run = async () => {
+  const res = await api.auth.createUser({ name: "Alice" });
+  console.log("Result:", res.value
+  );
+};
+
+run();

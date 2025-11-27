@@ -1,3 +1,1 @@
-
-
-export const listener = undefined
+export * from './extension'
