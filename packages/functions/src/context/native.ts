@@ -199,35 +199,36 @@ function activateAPI<C>(
   context: C,
   extensions: NativeExtension<C>[]
 ): any {
-  // If it's a function, activate it with context
+  // Check if it's a query or mutation definition (these are objects with _type)
+  if (node && typeof node === "object" && (node._type === "query" || node._type === "mutation")) {
+    return async (input: any) => {
+      // Parse and validate arguments
+      const parsed = node.args.safeParse(input);
+      if (!parsed.success) {
+        return failure(
+          exception({
+            name: "ValidationError",
+            message: parsed.error.message,
+          })
+        );
+      }
+
+      // Build full context with extensions
+      let fullContext = { ...context };
+      for (const ext of extensions) {
+        if (ext.context) {
+          const partial = await ext.context(fullContext as C);
+          fullContext = { ...fullContext, ...partial };
+        }
+      }
+
+      // Call handler with ctx BEFORE args
+      return node.handler(fullContext, parsed.data);
+    };
+  }
+
+  // If it's a function (but not a query/mutation), return as-is
   if (typeof node === "function") {
-    // Check if it's a query or mutation definition
-    if (node._type === "query" || node._type === "mutation") {
-      return async (input: any) => {
-        // Parse and validate arguments
-        const parsed = node.args.safeParse(input);
-        if (!parsed.success) {
-          return failure(
-            exception({
-              name: "ValidationError",
-              message: parsed.error.message,
-            })
-          );
-        }
-
-        // Build full context with extensions
-        let fullContext = { ...context };
-        for (const ext of extensions) {
-          if (ext.context) {
-            const partial = await ext.context(fullContext as C);
-            fullContext = { ...fullContext, ...partial };
-          }
-        }
-
-        // Call handler with ctx BEFORE args
-        return node.handler(fullContext, parsed.data);
-      };
-    }
     return node;
   }
 

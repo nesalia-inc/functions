@@ -39,8 +39,8 @@ describe("defineContext (Native API)", () => {
       const api = createAPI({ getUser });
       const result = await api.getUser({ id: 456 });
 
-      expect(result.ok).toBe(true);
-      if (result.ok) {
+      expect(result.isSuccess()).toBe(true);
+      if (result.isSuccess()) {
         expect(result.value).toEqual({ id: 456, requestedBy: "user-123" });
       }
     });
@@ -58,8 +58,8 @@ describe("defineContext (Native API)", () => {
       const api = createAPI({ createUser });
       const result = await api.createUser({ name: "Alice" });
 
-      expect(result.ok).toBe(true);
-      if (result.ok) {
+      expect(result.isSuccess()).toBe(true);
+      if (result.isSuccess()) {
         expect(result.value).toEqual({ id: 1, name: "Alice" });
       }
     });
@@ -75,8 +75,8 @@ describe("defineContext (Native API)", () => {
       const api = createAPI({ getUser });
       const result = await api.getUser({ id: "invalid" as any });
 
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
+      expect(result.isSuccess()).toBe(false);
+      if (!result.isSuccess()) {
         expect(result.error.name).toBe("ValidationError");
       }
     });
@@ -97,7 +97,7 @@ describe("defineContext (Native API)", () => {
 
       const result = await api.users.profile.getUser({ id: 123 });
 
-      expect(result.ok).toBe(true);
+      expect(result.isSuccess()).toBe(true);
     });
 
     it("should support multiple endpoints", async () => {
@@ -141,8 +141,8 @@ describe("defineContext (Native API)", () => {
 
       const result = await api.getUser({ id: 1 });
 
-      expect(result.ok).toBe(true);
-      if (result.ok) {
+      expect(result.isSuccess()).toBe(true);
+      if (result.isSuccess()) {
         expect(result.value.requestedBy).toBe("user-123");
       }
     });
@@ -174,7 +174,7 @@ describe("defineContext (Native API)", () => {
 
       const result = await api.getUser({});
 
-      expect(result.ok).toBe(true);
+      expect(result.isSuccess()).toBe(true);
     });
   });
 
@@ -197,7 +197,7 @@ describe("defineContext (Native API)", () => {
 
       const result = await api.getUser({ id: 123, include: true });
 
-      expect(result.ok).toBe(true);
+      expect(result.isSuccess()).toBe(true);
     });
 
     it("should infer return types", async () => {
@@ -218,7 +218,7 @@ describe("defineContext (Native API)", () => {
 
       const result = await api.getUser({ id: 1 });
 
-      if (result.ok) {
+      if (result.isSuccess()) {
         expect(result.value.name).toBe("User");
       }
     });
@@ -285,7 +285,7 @@ describe("defineContext (Native API)", () => {
 
       const result = await api.failureQuery({});
 
-      expect(result.ok).toBe(false);
+      expect(result.isSuccess()).toBe(false);
     });
   });
 
@@ -302,8 +302,8 @@ describe("defineContext (Native API)", () => {
       const api = createAPI({ echo });
       const result = await api.echo({ message: "hello" });
 
-      expect(result.ok).toBe(true);
-      if (result.ok) {
+      expect(result.isSuccess()).toBe(true);
+      if (result.isSuccess()) {
         expect(result.value.echo).toBe("hello");
       }
     });
@@ -319,8 +319,8 @@ describe("defineContext (Native API)", () => {
       const api = createAPI({ simple });
       const result = await api.simple({ value: 21 });
 
-      expect(result.ok).toBe(true);
-      if (result.ok) {
+      expect(result.isSuccess()).toBe(true);
+      if (result.isSuccess()) {
         expect(result.value.doubled).toBe(42);
       }
     });

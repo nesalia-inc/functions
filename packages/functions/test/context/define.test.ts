@@ -8,7 +8,7 @@ import { success, failure } from "../../src/types";
 describe("defineContext", () => {
   describe("basic context creation", () => {
     it("should create context builder with default empty context", () => {
-      const { t, createAPI } = defineContext();
+      const { t, createAPI } = defineContext().withExtensions([rpc]);
 
       expect(t).toBeDefined();
       expect(createAPI).toBeDefined();
@@ -17,7 +17,7 @@ describe("defineContext", () => {
 
     it("should create context builder with initial context", () => {
       const initialContext = { userId: "123", role: "admin" };
-      const { t, createAPI } = defineContext(initialContext);
+      const { t, createAPI } = defineContext(initialContext).withExtensions([rpc]);
 
       expect(t).toBeDefined();
       expect(createAPI).toBeDefined();
