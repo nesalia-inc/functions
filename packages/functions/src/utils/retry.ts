@@ -247,6 +247,7 @@ export const RetryPredicates = {
       name.includes("network") ||
       name.includes("fetch") ||
       name.includes("timeout") ||
+      message.includes("network") ||
       message.includes("econnrefused") ||
       message.includes("enotfound") ||
       message.includes("etimedout") ||
@@ -341,7 +342,10 @@ export const RetryConfigs = {
    * Network retry with network-specific predicate
    */
   network: {
-    ...RetryConfigs.standard,
+    maxAttempts: 5,
+    initialDelay: 1000,
+    backoffMultiplier: 2,
+    maxDelay: 30000,
     isRetryable: RetryPredicates.networkErrors,
   },
 

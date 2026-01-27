@@ -164,7 +164,8 @@ export class CacheInvalidationStream {
       operation,
       timestamp: Date.now(),
       result: result._tag === "Success" ? result.value : undefined,
-      error: result._tag === "Exception" ? result.errors : undefined,
+      error: result._tag === "Exception" ? result.errors :
+             result._tag === "Failure" ? result.causes : undefined,
     };
 
     this.addToHistory(event);
@@ -317,8 +318,10 @@ export class CacheInvalidationStream {
    * Get event history
    */
   getHistory(limit?: number): StreamEvent[] {
-    const history = this.eventHistory.slice(-limit || this.maxHistorySize);
-    return history;
+    if (limit !== undefined) {
+      return this.eventHistory.slice(-limit);
+    }
+    return [...this.eventHistory];
   }
 
   /**

@@ -160,6 +160,7 @@ describe("retry", () => {
       const retried = retry(fn, {
         maxAttempts: 4,
         initialDelay: 100,
+        backoffMultiplier: 1,
         jitter: true,
         onRetry,
       });

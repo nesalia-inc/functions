@@ -7,7 +7,7 @@ import {
   type CacheInvalidationEvent,
   type MutationEvent,
 } from "../../src/events/stream";
-import { successOutcome, exceptionOutcome, Causes, Exceptions } from "../../src/types/outcome";
+import { successOutcome, failureOutcome, exceptionOutcome, Causes, Exceptions } from "../../src/types/outcome";
 
 describe("CacheInvalidationStream", () => {
   let stream: CacheInvalidationStream;
@@ -128,8 +128,8 @@ describe("CacheInvalidationStream", () => {
     });
 
     it("should create mutation event from failed outcome", () => {
-      const error = Exceptions.validation("Invalid email");
-      const outcome = exceptionOutcome([error]);
+      const cause = Causes.validation("Invalid email", { field: "email" });
+      const outcome = failureOutcome(cause);
       const event = stream.notifyMutation("createUser", outcome);
 
       expect(event.type).toBe("mutation");

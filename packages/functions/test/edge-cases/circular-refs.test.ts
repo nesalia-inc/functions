@@ -53,7 +53,7 @@ describe("Edge Cases: Circular References", () => {
 
       const api = createAPI({
         root: {
-          l1: { l2: { l3: { l4: { l5: { l6: { l7: { l8: { l9: { l10: { endpoint } } } } } } } } },
+          l1: { l2: { l3: { l4: { l5: { l6: { l7: { l8: { l9: { l10: { endpoint } } } } } } } } } },
         },
         runtimeContext: {}
       });
