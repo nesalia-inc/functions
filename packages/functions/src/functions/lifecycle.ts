@@ -32,7 +32,7 @@ export type RunnableProcedure<
   TOutput = any,
   TError extends Exception = Exception
 > = {
-  (input: TArgs, ctx: TContext): AsyncResult<TOutput, TError>;
+  (ctx: TContext, input: TArgs): AsyncResult<TOutput, TError>;
 } & {
   beforeInvoke<Args = TArgs>(
     fn: (ctx: TContext, args: Args) => void | Promise<void>
@@ -91,8 +91,8 @@ export function query<
   name?: string;
   args: TArgs;
   handler: (
-    args: z.infer<TArgs>,
-    ctx: TContext
+    ctx: TContext,
+    args: z.infer<TArgs>
   ) => AsyncResult<TOutput, TError>;
 }): RunnableProcedure<z.infer<TArgs>, TContext, TOutput, TError> {
   type Input = z.infer<TArgs>;
@@ -157,7 +157,7 @@ export function query<
     // 3. Execute handler
     let result: AsyncResult<TOutput, TError>;
     try {
-      result = await options.handler(data, context);
+      result = await options.handler(context, data);
     } catch (err) {
       const error = exception({
         name: "HandlerError",
@@ -256,8 +256,8 @@ export function mutation<
   name?: string;
   args: TArgs;
   handler: (
-    args: z.infer<TArgs>,
-    ctx: TContext
+    ctx: TContext,
+    args: z.infer<TArgs>
   ) => AsyncResult<TOutput, TError>;
 }): RunnableProcedure<z.infer<TArgs>, TContext, TOutput, TError> {
   // Mutions use the same implementation as queries
