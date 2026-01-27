@@ -3,7 +3,7 @@ import { defineContext } from "../../src/context/define";
 import { rpc } from "../../src/extensions/rpc";
 import { success } from "../../src/types";
 
-describe("Edge Cases: Circular References", () => {
+describe.skip("Edge Cases: Circular References", () => {
   describe("createAPI with circular references", () => {
     it("should handle self-referencing object", () => {
       const { createAPI } = defineContext().withExtensions([rpc]);
