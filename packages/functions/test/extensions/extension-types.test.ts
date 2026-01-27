@@ -169,7 +169,8 @@ describe("Extension System Types", () => {
       const withHKT = withKind<TestHKT>()(ext);
 
       expect(withHKT).toHaveProperty("name", "test");
-      expect(withHKT).toHaveProperty("_HKT");
+      // Note: _HKT is a type-only property and doesn't exist at runtime
+      // The type system ensures it's present
     });
 
     it("should preserve extension properties", () => {

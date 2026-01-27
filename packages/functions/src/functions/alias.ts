@@ -181,11 +181,13 @@ export function createCommandRegistry() {
     resolve(aliasName: string): string | undefined {
       const primaryAliases = aliases.get(aliasName);
       if (primaryAliases && primaryAliases.size > 0) {
-        // Return the first alias that's not the name itself
+        // If the name itself is in the aliases set, it's the primary command
+        if (primaryAliases.has(aliasName)) {
+          return aliasName;
+        }
+        // Otherwise, return the primary (first) alias
         for (const alias of primaryAliases) {
-          if (alias !== aliasName) {
-            return alias;
-          }
+          return alias;
         }
       }
       return undefined;

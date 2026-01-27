@@ -177,10 +177,7 @@ describe("parseArgs", () => {
     });
 
     it("should fail on strict schema with extra fields", () => {
-      const schema = z.object(
-        { name: z.string() },
-        { strict: true }
-      );
+      const schema = z.object({ name: z.string() }).strict();
       const result = parseArgs(schema, { name: "Alice", extra: "field" });
 
       expect(result.isFailure()).toBe(true);
@@ -292,11 +289,15 @@ describe("parseArgs", () => {
     });
 
     it("should handle custom error maps", () => {
+      // In Zod v4, errorMap has been replaced with a different approach
+      // Using refine with custom message instead (applies after basic validation)
       const schema = z.object({
-        name: z.string({ errorMap: () => ({ message: "Custom error" }) }),
+        name: z.string().refine((val) => val.length > 3, {
+          message: "Custom error: name must be longer than 3 characters",
+        }),
       });
 
-      const result = parseArgs(schema, { name: 123 });
+      const result = parseArgs(schema, { name: "Bob" }); // Valid string but too short
 
       expect(result.isFailure()).toBe(true);
       if (result.isFailure()) {

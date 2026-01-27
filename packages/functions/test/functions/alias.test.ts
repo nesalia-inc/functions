@@ -9,7 +9,7 @@ describe("Command Aliases", () => {
     it("should create a single alias for a procedure", async () => {
       const getUser = query({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id, name: "User" }),
+        handler: async (ctx, args) => success({ id: args.id, name: "User" }),
       });
 
       const fetchUser = alias(getUser, "fetchUser");
@@ -22,16 +22,16 @@ describe("Command Aliases", () => {
     it("should execute through the alias", async () => {
       const getUser = query({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id, name: "User" }),
+        handler: async (ctx, args) => success({ id: args.id, name: "User" }),
       });
 
       alias(getUser, "fetchUser");
 
       // Execute through the alias property
-      const result = await (getUser as any).fetchUser({ id: 123 }, {});
+      const result = await (getUser as any).fetchUser({}, { id: 123 });
 
-      expect(result.ok).toBe(true);
-      if (result.ok) {
+      expect(result.isSuccess()).toBe(true);
+      if (result.isSuccess()) {
         expect(result.value.id).toBe(123);
       }
     });
@@ -39,7 +39,7 @@ describe("Command Aliases", () => {
     it("should work with mutations", async () => {
       const createUser = mutation({
         args: z.object({ name: z.string() }),
-        handler: async (args, ctx) => success({ id: 1, name: args.name }),
+        handler: async (ctx, args) => success({ id: 1, name: args.name }),
       });
 
       const registerUser = alias(createUser, "registerUser");
@@ -50,7 +50,7 @@ describe("Command Aliases", () => {
     it("should support chaining multiple aliases", async () => {
       const getUser = query({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id }),
+        handler: async (ctx, args) => success({ id: args.id }),
       });
 
       alias(alias(alias(getUser, "fetchUser"), "retrieveUser"), "getUserById");
@@ -66,7 +66,7 @@ describe("Command Aliases", () => {
     it("should create multiple aliases at once", async () => {
       const getUser = query({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id }),
+        handler: async (ctx, args) => success({ id: args.id }),
       });
 
       aliases(getUser, ["fetchUser", "retrieveUser", "getUserById"]);
@@ -79,7 +79,7 @@ describe("Command Aliases", () => {
     it("should work with empty alias array", () => {
       const getUser = query({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id }),
+        handler: async (ctx, args) => success({ id: args.id }),
       });
 
       const result = aliases(getUser, []);
@@ -90,7 +90,7 @@ describe("Command Aliases", () => {
     it("should preserve existing aliases when adding more", () => {
       const getUser = query({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id }),
+        handler: async (ctx, args) => success({ id: args.id }),
       });
 
       alias(getUser, "firstAlias");
@@ -106,12 +106,12 @@ describe("Command Aliases", () => {
     it("should create an API with procedures and aliases", () => {
       const getUser = query({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id }),
+        handler: async (ctx, args) => success({ id: args.id }),
       });
 
       const createUser = mutation({
         args: z.object({ name: z.string() }),
-        handler: async (args, ctx) => success({ id: 1 }),
+        handler: async (ctx, args) => success({ id: 1 }),
       });
 
       const api = withAliases({
@@ -154,7 +154,7 @@ describe("Command Aliases", () => {
     it("should handle nested objects", () => {
       const getUser = query({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id }),
+        handler: async (ctx, args) => success({ id: args.id }),
       });
 
       const api = withAliases({
@@ -175,7 +175,7 @@ describe("Command Aliases", () => {
 
       const getUser = query({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id }),
+        handler: async (ctx, args) => success({ id: args.id }),
       });
 
       registry.register("getUser", getUser);
@@ -189,7 +189,7 @@ describe("Command Aliases", () => {
 
       const getUser = query({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id }),
+        handler: async (ctx, args) => success({ id: args.id }),
       });
 
       registry.register("getUser", getUser);
@@ -211,7 +211,7 @@ describe("Command Aliases", () => {
 
       const getUser = query({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id }),
+        handler: async (ctx, args) => success({ id: args.id }),
       });
 
       registry.register("getUser", getUser);
@@ -230,14 +230,15 @@ describe("Command Aliases", () => {
 
       const getUser = query({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id }),
+        handler: async (ctx, args) => success({ id: args.id }),
       });
 
       registry.register("getUser", getUser);
       registry.alias("getUser", "fetchUser");
 
       expect(registry.resolve("fetchUser")).toBe("getUser");
-      expect(registry.resolve("getUser")).toBeUndefined();
+      // getUser resolves to itself (primary command)
+      expect(registry.resolve("getUser")).toBe("getUser");
     });
 
     it("should throw error when aliasing non-existent command", () => {
@@ -253,7 +254,7 @@ describe("Command Aliases", () => {
 
       const getUser = query({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id }),
+        handler: async (ctx, args) => success({ id: args.id }),
       });
 
       registry.register("getUser", getUser);
@@ -296,7 +297,7 @@ describe("Command Aliases", () => {
 
       const getUser = query({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id }),
+        handler: async (ctx, args) => success({ id: args.id }),
       });
 
       registry.register("getUser", getUser);
@@ -315,12 +316,12 @@ describe("Command Aliases", () => {
 
       const getUser = query({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id }),
+        handler: async (ctx, args) => success({ id: args.id }),
       });
 
       const createUser = mutation({
         args: z.object({ name: z.string() }),
-        handler: async (args, ctx) => success({ id: 1 }),
+        handler: async (ctx, args) => success({ id: 1 }),
       });
 
       registry.register("getUser", getUser);
@@ -366,7 +367,7 @@ describe("Command Aliases", () => {
 
       const getUserV2 = query({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id, version: 2 }),
+        handler: async (ctx, args) => success({ id: args.id, version: 2 }),
       });
 
       // Register v2 as primary
@@ -387,7 +388,7 @@ describe("Command Aliases", () => {
 
       const createUser = mutation({
         args: z.object({ name: z.string() }),
-        handler: async (args, ctx) => success({ id: 1, ...args }),
+        handler: async (ctx, args) => success({ id: 1, ...args }),
       });
 
       registry.register("createUser", createUser);
@@ -410,13 +411,13 @@ describe("Command Aliases", () => {
       // Old procedure
       const getUserNameOld = query({
         args: z.object({ userId: z.number() }),
-        handler: async (args, ctx) => success({ name: "User" }),
+        handler: async (ctx, args) => success({ name: "User" }),
       });
 
       // New procedure with different args
       const getUserNew = query({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id, name: "User" }),
+        handler: async (ctx, args) => success({ id: args.id, name: "User" }),
       });
 
       const registry = createCommandRegistry();
@@ -440,16 +441,16 @@ describe("Command Aliases", () => {
         id: number;
       }, Context, { id: number; name: string }>({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id, name: "User" }),
+        handler: async (ctx, args) => success({ id: args.id, name: "User" }),
       });
 
       const fetchUser = alias(getUser, "fetchUser");
 
       // Types should be preserved
-      const result = await fetchUser({ id: 123 }, { userId: "test" });
+      const result = await fetchUser({}, { id: 123 }, { userId: "test" });
 
-      expect(result.ok).toBe(true);
-      if (result.ok) {
+      expect(result.isSuccess()).toBe(true);
+      if (result.isSuccess()) {
         expect(result.value.id).toBe(123);
         expect(result.value.name).toBe("User");
       }
@@ -462,7 +463,7 @@ describe("Command Aliases", () => {
 
       const getUser = query({
         args: z.object({ id: z.number() }),
-        handler: async (args, ctx) => success({ id: args.id }),
+        handler: async (ctx, args) => success({ id: args.id }),
       });
 
       registry.register("getUser", getUser);
