@@ -163,17 +163,7 @@ export function query<
         name: "HandlerError",
         message: err instanceof Error ? err.message : String(err),
       }) as TError;
-
-      // Call onError hooks for handler errors
-      for (const hook of state.onErrorHooks) {
-        try {
-          await hook(context, data, error);
-        } catch (err) {
-          console.error("Error in onError hook:", err);
-        }
-      }
-
-      return failure(error);
+      result = failure(error);
     }
 
     // 4. Execute afterInvoke hooks (runs regardless of success/failure)
@@ -185,7 +175,19 @@ export function query<
       }
     }
 
-    // 5. Dispatch based on result
+    // 5. If handler threw, call onError hooks and return
+    if (result.isFailure() && result.error.name === "HandlerError") {
+      for (const hook of state.onErrorHooks) {
+        try {
+          await hook(context, data, result.error);
+        } catch (err) {
+          console.error("Error in onError hook:", err);
+        }
+      }
+      return result;
+    }
+
+    // 6. Dispatch based on result
     if (result.isSuccess()) {
       // Success - call onSuccess hooks
       for (const hook of state.onSuccessHooks) {

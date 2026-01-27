@@ -55,9 +55,9 @@ describe("Lifecycle Hooks", () => {
 
       expect(afterInvokeSpy).toHaveBeenCalledTimes(1);
       expect(afterInvokeSpy).toHaveBeenCalledWith(
-        { id: 123 },
         expect.any(Object),
-        expect.objectContaining({ ok: true })
+        { id: 123 },
+        expect.objectContaining({ _tag: "Success" })
       );
     });
 
@@ -75,8 +75,8 @@ describe("Lifecycle Hooks", () => {
 
       expect(onSuccessSpy).toHaveBeenCalledTimes(1);
       expect(onSuccessSpy).toHaveBeenCalledWith(
-        { id: 123 },
         expect.any(Object),
+        { id: 123 },
         { id: 123, name: "User" }
       );
     });
@@ -96,8 +96,8 @@ describe("Lifecycle Hooks", () => {
 
       expect(onErrorSpy).toHaveBeenCalledTimes(1);
       expect(onErrorSpy).toHaveBeenCalledWith(
-        { id: 123 },
         expect.any(Object),
+        { id: 123 },
         testError
       );
     });
@@ -217,11 +217,11 @@ describe("Lifecycle Hooks", () => {
         .onSuccess(successSpy)
         .onError(errorSpy);
 
-      await testQuery({ value: 21 }, {});
+      await testQuery({}, { value: 21 });
 
       expect(beforeSpy).toHaveBeenCalled();
       expect(afterSpy).toHaveBeenCalled();
-      expect(successSpy).toHaveBeenCalledWith({ value: 21 }, {}, 42);
+      expect(successSpy).toHaveBeenCalledWith(expect.any(Object), { value: 21 }, 42);
       expect(errorSpy).not.toHaveBeenCalled();
     });
   });
@@ -249,8 +249,8 @@ describe("Lifecycle Hooks", () => {
       expect(beforeSpy).toHaveBeenCalledTimes(1);
       expect(afterSpy).toHaveBeenCalledTimes(1);
       expect(successSpy).toHaveBeenCalledWith(
+        expect.any(Object),
         { name: "Alice" },
-        {},
         { id: 1, name: "Alice" }
       );
     });
@@ -464,7 +464,7 @@ describe("Lifecycle Hooks", () => {
 
       const testQuery = query({
         args: z.object({}),
-        handler: async (args, ctx: Context) => {
+        handler: async (ctx: Context, args) => {
           return success(ctx.userId);
         },
       });
@@ -474,7 +474,7 @@ describe("Lifecycle Hooks", () => {
         expect(typeof ctx.userId).toBe("string");
       });
 
-      const result = await testQuery({}, { userId: "test-user" });
+      const result = await testQuery({ userId: "test-user" }, {});
 
       expect(result.isSuccess()).toBe(true);
       if (result.isSuccess()) {
@@ -494,7 +494,7 @@ describe("Lifecycle Hooks", () => {
         expect(typeof data.name).toBe("string");
       });
 
-      const result = await testQuery({ id: 123, name: "Test" }, {});
+      const result = await testQuery({}, { id: 123, name: "Test" });
 
       expect(result.isSuccess()).toBe(true);
     });
