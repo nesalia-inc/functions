@@ -1,0 +1,417 @@
+---
+title: Router
+description: Organize your API endpoints with routers
+---
+
+# Router
+
+Routers help you organize your API endpoints into logical groups. They provide structure and make large APIs more manageable.
+
+## Basic Router
+
+Use `t.router()` to group related endpoints:
+
+```ts
+const api = createAPI({
+  users: t.router({
+    get: getUser,
+    list: listUsers,
+    create: createUser,
+    update: updateUser,
+    delete: deleteUser,
+  }),
+  posts: t.router({
+    get: getPost,
+    list: listPosts,
+    create: createPost,
+  }),
+});
+
+// Usage
+await api.users.get({ id: 1 });
+await api.users.list({});
+await api.users.create({ name: "Alice" });
+await api.posts.get({ id: 1 });
+await api.posts.list({});
+```
+
+## Nested Routers
+
+Routers can be nested for deeper organization:
+
+```ts
+const api = createAPI({
+  users: t.router({
+    profile: t.router({
+      get: getUserProfile,
+      update: updateUserProfile,
+      delete: deleteUserProfile,
+    }),
+    settings: t.router({
+      get: getUserSettings,
+      update: updateUserSettings,
+      notifications: t.router({
+        get: getNotificationSettings,
+        update: updateNotificationSettings,
+      }),
+    }),
+  }),
+});
+
+// Usage
+await api.users.profile.get({ userId: 1 });
+await api.users.profile.update({ userId: 1, name: "Alice" });
+await api.users.settings.get({ userId: 1 });
+await api.users.settings.notifications.get({ userId: 1 });
+await api.users.settings.notifications.update({ userId: 1, emailEnabled: true });
+```
+
+## Organizing by Domain
+
+Group related functionality:
+
+```ts
+// User domain
+const userRouter = t.router({
+  getById: t.query({
+    args: z.object({ id: z.number() }),
+    handler: async (ctx, args) => success(await ctx.db.users.find(args.id)),
+  }),
+
+  getByEmail: t.query({
+    args: z.object({ email: z.string().email() }),
+    handler: async (ctx, args) => success(await ctx.db.users.findByEmail(args.email)),
+  }),
+
+  create: t.mutation({
+    args: z.object({
+      name: z.string(),
+      email: z.string().email(),
+    }),
+    handler: async (ctx, args) => success(await ctx.db.users.create(args)),
+  }),
+});
+
+// Post domain
+const postRouter = t.router({
+  getById: t.query({
+    args: z.object({ id: z.number() }),
+    handler: async (ctx, args) => success(await ctx.db.posts.find(args.id)),
+  }),
+
+  listByUser: t.query({
+    args: z.object({ userId: z.number() }),
+    handler: async (ctx, args) => success(await ctx.db.posts.findByUser(args.userId)),
+  }),
+
+  create: t.mutation({
+    args: z.object({
+      userId: z.number(),
+      title: z.string(),
+      content: z.string(),
+    }),
+    handler: async (ctx, args) => success(await ctx.db.posts.create(args)),
+  }),
+});
+
+// Comment domain
+const commentRouter = t.router({
+  getById: t.query({
+    args: z.object({ id: z.number() }),
+    handler: async (ctx, args) => success(await ctx.db.comments.find(args.id)),
+  }),
+
+  create: t.mutation({
+    args: z.object({
+      postId: z.number(),
+      userId: z.number(),
+      content: z.string(),
+    }),
+    handler: async (ctx, args) => success(await ctx.db.comments.create(args)),
+  }),
+});
+
+// Combine all routers
+const api = createAPI({
+  users: userRouter,
+  posts: postRouter,
+  comments: commentRouter,
+});
+```
+
+## Organizing by Operation Type
+
+Group queries and mutations separately:
+
+```ts
+const api = createAPI({
+  queries: t.router({
+    users: t.router({
+      get: getUser,
+      list: listUsers,
+    }),
+    posts: t.router({
+      get: getPost,
+      list: listPosts,
+    }),
+  }),
+  mutations: t.router({
+    users: t.router({
+      create: createUser,
+      update: updateUser,
+      delete: deleteUser,
+    }),
+    posts: t.router({
+      create: createPost,
+      update: updatePost,
+      delete: deletePost,
+    }),
+  }),
+});
+
+// Usage
+await api.queries.users.get({ id: 1 });
+await api.mutations.users.create({ name: "Alice" });
+```
+
+## Versioned APIs
+
+Organize by API version:
+
+```ts
+const api = createAPI({
+  v1: t.router({
+    users: t.router({
+      get: getUserV1,
+      create: createUserV1,
+    }),
+  }),
+  v2: t.router({
+    users: t.router({
+      get: getUserV2,
+      create: createUserV2,
+      profile: t.router({
+        get: getUserProfileV2,
+      }),
+    }),
+  }),
+  v3: t.router({
+    users: t.router({
+      get: getUserV3,
+      create: createUserV3,
+      profile: t.router({
+        get: getUserProfileV3,
+        preferences: t.router({
+          get: getUserPreferencesV3,
+        }),
+      }),
+    }),
+  }),
+});
+
+// Usage
+await api.v1.users.get({ id: 1 });
+await api.v2.users.profile.get({ id: 1 });
+await api.v3.users.profile.preferences.get({ id: 1 });
+```
+
+## Modular Router Definition
+
+Define routers in separate files:
+
+```ts
+// routers/users.ts
+export const userRouter = (t: APIBuilder<Context>) => t.router({
+  getById: t.query({
+    args: z.object({ id: z.number() }),
+    handler: async (ctx, args) => success(await ctx.db.users.find(args.id)),
+  }),
+
+  create: t.mutation({
+    args: z.object({
+      name: z.string(),
+      email: z.string().email(),
+    }),
+    handler: async (ctx, args) => success(await ctx.db.users.create(args)),
+  }),
+});
+
+// routers/posts.ts
+export const postRouter = (t: APIBuilder<Context>) => t.router({
+  getById: t.query({
+    args: z.object({ id: z.number() }),
+    handler: async (ctx, args) => success(await ctx.db.posts.find(args.id)),
+  }),
+
+  create: t.mutation({
+    args: z.object({
+      userId: z.number(),
+      title: z.string(),
+    }),
+    handler: async (ctx, args) => success(await ctx.db.posts.create(args)),
+  }),
+});
+
+// index.ts
+const { t, createAPI } = defineContext<Context>({ ... });
+
+const api = createAPI({
+  users: userRouter(t),
+  posts: postRouter(t),
+});
+```
+
+## Namespaced Routers
+
+Add namespaces for clarity:
+
+```ts
+const api = createAPI({
+  admin: t.router({
+    users: t.router({
+      getAll: t.query({
+        args: z.object({}),
+        handler: async (ctx) => success(await ctx.db.users.findAll()),
+      }),
+      ban: t.mutation({
+        args: z.object({ userId: z.number(), reason: z.string() }),
+        handler: async (ctx, args) => success(await ctx.db.users.ban(args.userId, args.reason)),
+      }),
+    }),
+    stats: t.router({
+      get: t.query({
+        args: z.object({}),
+        handler: async (ctx) => success(await ctx.db.stats.get()),
+      }),
+    }),
+  }),
+  public: t.router({
+    users: t.router({
+      getById: t.query({
+        args: z.object({ id: z.number() }),
+        handler: async (ctx, args) => success(await ctx.db.users.find(args.id)),
+      }),
+    }),
+  }),
+});
+
+// Usage
+await api.admin.users.getAll({});
+await api.admin.users.ban({ userId: 1, reason: "Spam" });
+await api.public.users.getById({ id: 1 });
+```
+
+## Router Best Practices
+
+### 1. Consistent Naming
+
+Use consistent naming conventions:
+
+```ts
+// Good - consistent
+const usersRouter = t.router({
+  getById: getUserById,
+  getByEmail: getUserByEmail,
+  create: createUser,
+  update: updateUser,
+  delete: deleteUser,
+  list: listUsers,
+});
+
+// Avoid - inconsistent
+const usersRouter = t.router({
+  getUser,           // getById
+  fetchByEmail,      // getByEmail
+  createUser,        // create
+  updateUserProfile, // update
+  removeUser,        // delete
+  getAllUsers,       // list
+});
+```
+
+### 2. Logical Grouping
+
+Group related operations:
+
+```ts
+// Good - logical grouping
+const api = createAPI({
+  users: t.router({
+    profile: t.router({
+      get: getUserProfile,
+      update: updateUserProfile,
+    }),
+    settings: t.router({
+      get: getUserSettings,
+      update: getUserSettings,
+    }),
+    notifications: t.router({
+      get: getNotificationSettings,
+      update: updateNotificationSettings,
+    }),
+  }),
+});
+
+// Avoid - flat structure
+const api = createAPI({
+  getUserProfile,
+  updateUserProfile,
+  getUserSettings,
+  updateUserSettings,
+  getNotificationSettings,
+  updateNotificationSettings,
+});
+```
+
+### 3. Versioning
+
+Plan for versioning from the start:
+
+```ts
+const api = createAPI({
+  v1: t.router({
+    // Current version
+    users: usersRouterV1(t),
+  }),
+  v2: t.router({
+    // Next version (experimental)
+    users: usersRouterV2(t),
+  }),
+});
+```
+
+### 4. Document Your Routes
+
+Add JSDoc comments:
+
+```ts
+/**
+ * User-related endpoints
+ */
+export const userRouter = t.router({
+  /**
+   * Get a user by ID
+   */
+  getById: t.query({
+    args: z.object({ id: z.number() }),
+    handler: async (ctx, args) => success(await ctx.db.users.find(args.id)),
+  }),
+
+  /**
+   * Create a new user
+   */
+  create: t.mutation({
+    args: z.object({
+      name: z.string(),
+      email: z.string().email(),
+    }),
+    handler: async (ctx, args) => success(await ctx.db.users.create(args)),
+  }),
+});
+```
+
+## Next Steps
+
+- [Lifecycle Hooks](/docs/lifecycle-hooks) - Add middleware to routers
+- [Error Handling](/docs/error-handling) - Handle errors at the router level
+- [Advanced Features](/docs/advanced) - Discover advanced patterns

@@ -1,0 +1,364 @@
+---
+title: Queries & Mutations
+description: Creating type-safe operations with queries and mutations
+---
+
+# Queries & Mutations
+
+Queries and mutations are the building blocks of your API. They define operations that can be called with full type safety.
+
+## Queries
+
+Queries are **read-only** operations. They should not modify data and can be safely cached.
+
+### Creating a Query
+
+```ts
+import { success, failure, exception } from "@deessejs/functions";
+import { z } from "zod";
+
+const getUser = t.query({
+  args: z.object({
+    id: z.number(),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.find(args.id);
+
+    if (!user) {
+      return failure(
+        exception({ name: "NotFound", message: "User not found" })
+      );
+    }
+
+    return success(user);
+  },
+});
+```
+
+### Query Arguments
+
+Arguments are validated using Zod schemas:
+
+```ts
+// Simple argument
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    // args.id is a number
+  },
+});
+
+// Complex argument
+const searchUsers = t.query({
+  args: z.object({
+    query: z.string().min(2),
+    page: z.number().default(1),
+    limit: z.number().max(100).default(20),
+    sortBy: z.enum(["name", "email", "createdAt"]).default("name"),
+  }),
+  handler: async (ctx, args) => {
+    // All arguments are validated and typed
+    const results = await ctx.database.users.search(args);
+    return success(results);
+  },
+});
+
+// Optional arguments
+const getOptionalUser = t.query({
+  args: z.object({
+    id: z.number().optional(),
+  }),
+  handler: async (ctx, args) => {
+    if (args.id) {
+      return success(await ctx.database.users.find(args.id));
+    }
+    return success(null);
+  },
+});
+```
+
+### Query Return Types
+
+Queries return a `Result<T, Exception>`:
+
+```ts
+const result = await api.getUser({ id: 1 });
+
+if (result.ok) {
+  console.log(result.value); // Success value
+} else {
+  console.error(result.error); // Error
+}
+```
+
+## Mutations
+
+Mutations are **write** operations. They modify data and typically shouldn't be cached.
+
+### Creating a Mutation
+
+```ts
+const createUser = t.mutation({
+  args: z.object({
+    name: z.string().min(2),
+    email: z.string().email(),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.create({
+      name: args.name,
+      email: args.email,
+      createdBy: ctx.userId, // Access context
+    });
+
+    return success(user);
+  },
+});
+```
+
+### Mutation Patterns
+
+```ts
+// Create
+const createUser = t.mutation({
+  args: z.object({
+    name: z.string(),
+    email: z.string().email(),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.create(args);
+    return success(user);
+  },
+});
+
+// Update
+const updateUser = t.mutation({
+  args: z.object({
+    id: z.number(),
+    name: z.string().optional(),
+    email: z.string().email().optional(),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.update(args.id, args);
+    return success(user);
+  },
+});
+
+// Delete
+const deleteUser = t.mutation({
+  args: z.object({
+    id: z.number(),
+  }),
+  handler: async (ctx, args) => {
+    await ctx.database.users.delete(args.id);
+    return success({ deleted: true });
+  },
+});
+```
+
+## Handler Signature
+
+Both queries and mutations use the same handler signature:
+
+```ts
+handler: async (ctx, args) => {
+  // ctx: Your context type
+  // args: Zod-validated input
+  return success(value); // or failure(error)
+}
+```
+
+### Context First
+
+**Important:** Context comes **before** arguments:
+
+```ts
+handler: async (ctx, args) => {
+  // ✅ Correct - ctx before args
+  console.log(ctx.userId, args.id);
+}
+
+handler: async (args, ctx) => {
+  // ❌ Wrong - args before ctx
+}
+```
+
+## Error Handling
+
+Return failures for expected errors:
+
+```ts
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.find(args.id);
+
+    if (!user) {
+      // Expected error - return failure
+      return failure(
+        exception({ name: "NotFound", message: "User not found" })
+      );
+    }
+
+    return success(user);
+  },
+});
+```
+
+Let errors propagate for unexpected errors:
+
+```ts
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    // Unexpected error - let it throw
+    const user = await ctx.database.users.find(args.id);
+
+    return success(user);
+  },
+}).onError((ctx, args, error) => {
+  // Log unexpected errors
+  ctx.logger.error("Unexpected error", { error });
+});
+```
+
+## Type Safety
+
+### Argument Validation
+
+```ts
+// TypeScript validates arguments at compile time
+await api.getUser({ id: 1 });      // ✅ OK
+await api.getUser({ id: "123" });  // ❌ Type error
+await api.getUser({});             // ❌ Missing required field
+```
+
+### Return Types
+
+```ts
+const result = await api.getUser({ id: 1 });
+
+if (result.ok) {
+  // TypeScript knows result.value is User
+  console.log(result.value.name); // string
+  console.log(result.value.email); // string
+}
+```
+
+## Examples
+
+### CRUD Operations
+
+```ts
+// Read
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.find(args.id);
+    if (!user) {
+      return failure(exception({ name: "NotFound", message: "User not found" }));
+    }
+    return success(user);
+  },
+});
+
+// Create
+const createUser = t.mutation({
+  args: z.object({
+    name: z.string().min(2),
+    email: z.string().email(),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.create(args);
+    return success(user);
+  },
+});
+
+// Update
+const updateUser = t.mutation({
+  args: z.object({
+    id: z.number(),
+    name: z.string().min(2).optional(),
+    email: z.string().email().optional(),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.update(args.id, {
+      name: args.name,
+      email: args.email,
+    });
+    return success(user);
+  },
+});
+
+// Delete
+const deleteUser = t.mutation({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    await ctx.database.users.delete(args.id);
+    return success({ deleted: true });
+  },
+});
+
+// Create API
+const api = createAPI({
+  users: t.router({
+    get: getUser,
+    create: createUser,
+    update: updateUser,
+    delete: deleteUser,
+  }),
+});
+```
+
+### Nested Queries
+
+```ts
+const getUserPosts = t.query({
+  args: z.object({
+    userId: z.number(),
+    includeComments: z.boolean().default(false),
+  }),
+  handler: async (ctx, args) => {
+    const posts = await ctx.database.posts.findByUser(args.userId);
+
+    if (args.includeComments) {
+      for (const post of posts) {
+        post.comments = await ctx.database.comments.findByPost(post.id);
+      }
+    }
+
+    return success(posts);
+  },
+});
+```
+
+### Validation
+
+```ts
+const registerUser = t.mutation({
+  args: z.object({
+    name: z.string().min(2).max(50),
+    email: z.string().email(),
+    password: z.string().min(8),
+    confirmPassword: z.string(),
+  }).refine(data => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+  }),
+  handler: async (ctx, args) => {
+    // All validations passed
+    const user = await ctx.database.users.create({
+      name: args.name,
+      email: args.email,
+      password: await hash(args.password),
+    });
+
+    return success(user);
+  },
+});
+```
+
+## Next Steps
+
+- [Router](/docs/router) - Organize your operations
+- [Lifecycle Hooks](/docs/lifecycle-hooks) - Add middleware
+- [Error Handling](/docs/error-handling) - Handle errors gracefully
