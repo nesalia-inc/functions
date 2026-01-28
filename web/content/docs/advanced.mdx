@@ -1,0 +1,483 @@
+---
+title: Advanced Features
+description: Advanced patterns and features
+---
+
+# Advanced Features
+
+Explore advanced patterns and features for building sophisticated APIs.
+
+## Retry
+
+Automatically retry failed operations with configurable backoff strategies.
+
+### Basic Retry
+
+```ts
+import { retry } from "@deessejs/functions";
+
+const fetchWithRetry = retry(
+  async (url: string) => {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    return response.json();
+  },
+  {
+    maxAttempts: 3,
+    initialDelay: 1000,
+  }
+);
+
+const data = await fetchWithRetry("https://api.example.com/data");
+```
+
+### Retry Configurations
+
+```ts
+import { RetryConfigs, retry } from "@deessejs/functions";
+
+// Quick retry for transient failures
+const quickRetry = retry(operation, RetryConfigs.quick);
+
+// Standard retry for most operations
+const standardRetry = retry(operation, RetryConfigs.standard);
+
+// Aggressive retry for resilient operations
+const aggressiveRetry = retry(operation, RetryConfigs.aggressive);
+
+// Network-specific retry
+const networkRetry = retry(fetchData, RetryConfigs.network);
+```
+
+### Retry Predicates
+
+Control which errors to retry:
+
+```ts
+import { RetryPredicates } from "@deessejs/functions";
+
+const selectiveRetry = retry(
+  async (url: string) => {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    return response.json();
+  },
+  {
+    maxAttempts: 5,
+    isRetryable: RetryPredicates.networkErrors,
+  }
+);
+
+// Or combine predicates
+const customRetry = retry(operation, {
+  maxAttempts: 3,
+  isRetryable: (error) =>
+    RetryPredicates.networkErrors(error) ||
+    RetryPredicates.rateLimitErrors(error),
+});
+```
+
+### Retry with Logging
+
+```ts
+import { withRetryLogging } from "@deessejs/functions";
+
+const retryWithLogs = withRetryLogging(
+  {
+    maxAttempts: 3,
+    initialDelay: 1000,
+  },
+  (message) => console.log(`[Retry] ${message}`)
+);
+
+const operation = retry(fetchData, retryWithLogs);
+```
+
+## Cache Invalidation Stream
+
+Coordinate cache invalidation across your application.
+
+### Basic Usage
+
+```ts
+import { createCacheStream } from "@deessejs/functions";
+
+const stream = createCacheStream();
+
+// Subscribe to cache changes
+const unsubscribe = stream.subscribe("users:123", (event) => {
+  if (event.type === "invalidation") {
+    console.log("Cache invalidated for", event.key);
+    // Refetch data
+    refetchUser(123);
+  }
+});
+
+// Invalidate cache
+stream.invalidate("users:123", {
+  tags: ["users"],
+  data: { reason: "User updated" },
+});
+
+// Later: unsubscribe();
+```
+
+### Tag-Based Subscriptions
+
+```ts
+// Subscribe by tags
+const unsubscribe = stream.subscribeByTags(
+  ["users", "posts"],
+  (event) => {
+    console.log("Event:", event);
+  }
+);
+
+// Invalidate by tag
+stream.invalidateByTag("users", { reason: "Bulk update" });
+```
+
+### Mutation Notifications
+
+```ts
+// Subscribe to mutations
+const unsubscribe = stream.subscribeToMutations(
+  ["createUser", "updateUser", "deleteUser"],
+  (event) => {
+    if (event.type === "mutation") {
+      console.log("Mutation:", event.operation);
+      console.log("Result:", event.result);
+    }
+  }
+);
+
+// Notify mutation
+import { successOutcome } from "@deessejs/functions";
+
+stream.notifyMutation(
+  "createUser",
+  successOutcome({ id: 1, name: "Alice" })
+);
+```
+
+### Stream Utilities
+
+```ts
+import { StreamUtils } from "@deessejs/functions";
+
+// Create cache keys
+const key = StreamUtils.key("users", 123); // "users:123"
+
+// Parse keys
+const parts = StreamUtils.parseKey("users:123"); // ["users", "123"]
+
+// Add tags to keys
+const tagged = StreamUtils.withTags("users:123", ["user", "profile"]);
+// "users:123:#user:#profile"
+
+// Extract tags from keys
+const tags = StreamUtils.extractTags("users:123:#user:#profile");
+// ["user", "profile"]
+```
+
+## Command Aliases
+
+Provide multiple names for the same operation.
+
+### Basic Aliases
+
+```ts
+import { aliases } from "@deessejs/functions";
+
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    return success(await ctx.db.users.find(args.id));
+  },
+});
+
+aliases(getUser, ["fetchUser", "retrieveUser", "getUserById"]);
+
+// All work the same
+await api.getUser({ id: 1 });
+await api.fetchUser({ id: 1 });
+await api.retrieveUser({ id: 1 });
+await api.getUserById({ id: 1 });
+```
+
+### Version Compatibility
+
+```ts
+// v1 endpoint
+const v1_getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    return success(await ctx.db.users.find(args.id));
+  },
+});
+
+// v2 endpoint with improved logic
+const v2_getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    const user = await ctx.db.users.find(args.id);
+    return success(user);
+  },
+});
+
+// Provide both for compatibility
+aliases(v2_getUser, ["getUser", "getUser_v1", "fetchUser"]);
+```
+
+## Standalone Query/Mutation
+
+Use queries and mutations outside of the API builder.
+
+### Standalone Query
+
+```ts
+import { query, success } from "@deessejs/functions";
+
+const doubleNumber = query({
+  args: z.object({ number: z.number() }),
+  handler: async (ctx, args) => {
+    return success({ result: args.number * 2 });
+  },
+})
+  .beforeInvoke(() => console.log("Starting calculation..."))
+  .onSuccess(() => console.log("Calculation complete"));
+
+const result = await doubleNumber(
+  { database: db, logger: log }, // context
+  { number: 5 } // args
+);
+
+console.log(result.value); // { result: 10 }
+```
+
+### Standalone Mutation
+
+```ts
+import { mutation, success } from "@deessejs/functions";
+
+const createUser = mutation({
+  args: z.object({
+    name: z.string(),
+    email: z.string().email(),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.db.users.create(args);
+    return success(user);
+  },
+})
+  .onSuccess(async (ctx, args, user) => {
+    await ctx.email.sendWelcome(user.email);
+  });
+
+const result = await createUser(
+  { database: db, email: emailService },
+  { name: "Alice", email: "alice@example.com" }
+);
+```
+
+## Advanced Patterns
+
+### Request Scoping
+
+```ts
+function createAPIForRequest(request: Request) {
+  const { t, createAPI } = defineContext<{
+    requestId: string;
+    userId: string;
+    userAgent: string;
+  }>({
+    requestId: crypto.randomUUID(),
+    userId: await authenticateUser(request),
+    userAgent: request.headers.get("user-agent") || "unknown",
+  });
+
+  return createAPI({
+    // ... endpoints
+  });
+}
+
+// Use per request
+const api1 = createAPIForRequest(request1);
+const api2 = createAPIForRequest(request2);
+```
+
+### Multi-Tenancy
+
+```ts
+interface TenantContext {
+  tenantId: string;
+  tenantName: string;
+  database: TenantDatabase;
+}
+
+function createTenantAPI(tenant: Tenant): API {
+  const { t, createAPI } = defineContext<TenantContext>({
+    tenantId: tenant.id,
+    tenantName: tenant.name,
+    database: createTenantDatabase(tenant.id),
+  });
+
+  return createAPI({
+    users: t.router({
+      list: t.query({
+        args: z.object({}),
+        handler: async (ctx) => {
+          // Automatically scoped to tenant
+          return success(await ctx.database.users.list());
+        },
+      }),
+    }),
+  });
+}
+
+const tenant1API = createTenantAPI(tenant1);
+const tenant2API = createTenantAPI(tenant2);
+```
+
+### Event Sourcing
+
+```ts
+import { createCacheStream } from "@deessejs/functions";
+
+const eventStream = createCacheStream();
+
+const createUser = t.mutation({
+  args: z.object({
+    name: z.string(),
+    email: z.string().email(),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.db.users.create(args);
+
+    // Emit event
+    eventStream.notifyMutation(
+      "UserCreated",
+      successOutcome({ user, timestamp: Date.now() })
+    );
+
+    return success(user);
+  },
+});
+
+// Subscribe to events
+eventStream.subscribeToMutations(["UserCreated"], async (event) => {
+  if (event.type === "mutation" && event.result) {
+    await sendWelcomeEmail(event.result.value.user.email);
+    await updateAuditLog("UserCreated", event.result.value);
+  }
+});
+```
+
+### Batch Operations
+
+```ts
+const batchCreateUsers = t.mutation({
+  args: z.object({
+    users: z.array(
+      z.object({
+        name: z.string(),
+        email: z.string().email(),
+      })
+    ),
+  }),
+  handler: async (ctx, args) => {
+    const results = await Promise.allSettled(
+      args.users.map(user => ctx.db.users.create(user))
+    );
+
+    const created = results
+      .filter(r => r.status === "fulfilled")
+      .map(r => (r as PromiseFulfilledResult<any>).value);
+
+    const failed = results
+      .filter(r => r.status === "rejected")
+      .map(r => (r as PromiseRejectedResult).reason);
+
+    return success({
+      created,
+      failed,
+      total: args.users.length,
+    });
+  },
+});
+```
+
+### Pagination
+
+```ts
+const listUsers = t.query({
+  args: z.object({
+    page: z.number().default(1),
+    limit: z.number().max(100).default(20),
+    sortBy: z.enum(["name", "email", "createdAt"]).default("createdAt"),
+    sortOrder: z.enum(["asc", "desc"]).default("desc"),
+  }),
+  handler: async (ctx, args) => {
+    const offset = (args.page - 1) * args.limit;
+
+    const [users, total] = await Promise.all([
+      ctx.db.users.findMany({
+        skip: offset,
+        take: args.limit,
+        orderBy: { [args.sortBy]: args.sortOrder },
+      }),
+      ctx.db.users.count(),
+    ]);
+
+    return success({
+      users,
+      pagination: {
+        page: args.page,
+        limit: args.limit,
+        total,
+        totalPages: Math.ceil(total / args.limit),
+      },
+    });
+  },
+});
+```
+
+### Atomic Operations
+
+```ts
+const transferFunds = t.mutation({
+  args: z.object({
+    fromUserId: z.number(),
+    toUserId: z.number(),
+    amount: z.number().positive(),
+  }),
+  handler: async (ctx, args) => {
+    // Use transaction
+    return await ctx.db.transaction(async (trx) => {
+      // Debit from sender
+      await trx.accounts.debit(args.fromUserId, args.amount);
+
+      // Credit to receiver
+      await trx.accounts.credit(args.toUserId, args.amount);
+
+      // Record transfer
+      const transfer = await trx.transfers.create({
+        fromUserId: args.fromUserId,
+        toUserId: args.toUserId,
+        amount: args.amount,
+      });
+
+      return success(transfer);
+    });
+  },
+});
+```
+
+## Next Steps
+
+- [Type System](/docs/types/result) - Explore type utilities
+- [Migration Guide](/docs/migration) - Migrate from older versions
