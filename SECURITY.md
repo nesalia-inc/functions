@@ -19,7 +19,7 @@ We take the security of DeesseJS Functions seriously. If you discover a security
 
 **Do NOT open a public issue.** Instead, send your report privately:
 
-**Email:** [security@deessejs.com](mailto:security@deessejs.com)
+**Email:** [contact@developerssecrets.com](mailto:contact@developerssecrets.com)
 
 **Please include:**
 
@@ -275,7 +275,7 @@ Security advisories will be published on GitHub with:
 ## Contact
 
 For security-related questions that are not vulnerability reports:
-- **Email:** [security@deessejs.com](mailto:security@deessejs.com)
+- **Email:** [contact@developerssecrets.com](mailto:contact@developerssecrets.com)
 - **PGP Key:** Available on request
 
 ---
