@@ -180,54 +180,30 @@ export default function HomePage() {
                       <div className="w-full overflow-x-auto">
                         <div className="relative flex items-center px-1 text-sm min-w-max">
                           <div aria-hidden="true" className="border-slate-300/5 text-slate-600 select-none border-r pr-4 font-mono">
-                            <div>
-                              {'01'}
-                              <br />
-                            </div>
-                            <div>
-                              {'02'}
-                              <br />
-                            </div>
-                            <div>
-                              {'03'}
-                              <br />
-                            </div>
-                            <div>
-                              {'04'}
-                              <br />
-                            </div>
-                            <div>
-                              {'05'}
-                              <br />
-                            </div>
-                            <div>
-                              {'06'}
-                              <br />
-                            </div>
-                            <div>
-                              {'07'}
-                              <br />
-                            </div>
-                            <div>
-                              {'08'}
-                              <br />
-                            </div>
-                            <div>
-                              {'09'}
-                              <br />
-                            </div>
-                            <div>
-                              {'10'}
-                              <br />
-                            </div>
-                            <div>
-                              {'11'}
-                              <br />
-                            </div>
-                            <div>
-                              {'12'}
-                              <br />
-                            </div>
+                            01
+                            <br />
+                            02
+                            <br />
+                            03
+                            <br />
+                            04
+                            <br />
+                            05
+                            <br />
+                            06
+                            <br />
+                            07
+                            <br />
+                            08
+                            <br />
+                            09
+                            <br />
+                            10
+                            <br />
+                            11
+                            <br />
+                            12
+                            <br />
                           </div>
                           <pre className="prism-code language-javascript" style={{ backgroundColor: 'transparent' }}>
                             <code className="px-4 font-mono whitespace-pre">
