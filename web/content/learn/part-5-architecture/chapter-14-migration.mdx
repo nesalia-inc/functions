@@ -1,0 +1,863 @@
+---
+title: Chapter 14
+description: Migrate from other frameworks
+---
+
+# Chapter 14: Migration - Coming from Other Frameworks
+
+This final chapter guides you through migrating from other API frameworks to DeesseJS Functions. Whether you're coming from tRPC, React Query, or a traditional Express setup, we've got you covered.
+
+## What you'll learn in this chapter
+
+- Migration from tRPC
+- Migration from React Query
+- Migration from Express/REST
+- Common migration patterns
+- Gradual migration strategies
+
+**Estimated reading time:** 30 minutes
+
+---
+
+## Migration from tRPC
+
+### tRPC vs DeesseJS Functions
+
+**tRPC approach:**
+```typescript
+import { initTRPC } from '@trpc/server';
+import { z } from 'zod';
+
+const t = initTRPC.context<Context>().create();
+
+export const userRouter = t.router({
+  getUser: t.procedure
+    .input(z.object({ id: z.number() }))
+    .query(({ input }) => {
+      return { id: input.id, name: 'User' };
+    }),
+});
+```
+
+**DeesseJS Functions approach:**
+```typescript
+import { defineContext, success } from '@deessejs/functions';
+import { z } from 'zod';
+
+const { t, createAPI } = defineContext<Context>({
+  userId: 'user-123',
+  database: myDatabase,
+});
+
+export const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+  return success(await ctx.database.users.findById(args.id));
+  },
+});
+```
+
+### Key Differences
+
+| Feature | tRPC | DeesseJS Functions |
+|---------|------|----------------------|
+| **Type transport** | Automatic | Explicit (but simple) |
+| **Context** | Manual context prop | Built-in context system |
+| **Error handling** | Try/catch or TRPCError | Outcome types |
+| **Client generation** | Auto-generates client | Manual but straightforward |
+| **Validation** | Zod built-in | Zod built-in |
+
+### Migration Steps
+
+#### Step 1: Replace Router Definition
+
+**Before (tRPC):**
+```typescript
+import { initTRPC } from '@trpc/server';
+
+const t = initTRPC.context<Context>().create();
+
+export const appRouter = t.router({
+  users: t.router({
+    get: t.procedure
+      .input(z.object({ id: z.number() }))
+      .query(({ input }) => {
+        return database.users.findById(input.id);
+      }),
+  }),
+});
+```
+
+**After (DeesseJS Functions):**
+```typescript
+import { defineContext, success } from '@deessejs/functions';
+import { z } from 'zod';
+
+const { t, createAPI } = defineContext<Context>({
+  userId: 'user-123',
+  database,
+});
+
+export const users = t.router({
+  get: t.query({
+    args: z.object({ id: z.number() }),
+    handler: async (ctx, args) => {
+      return success(await database.users.findById(args.id));
+    },
+  }),
+});
+```
+
+#### Step 2: Replace Client Calls
+
+**Before (tRPC client):**
+```typescript
+const { data } = await api.users.get.query({ id: 1 });
+
+if (data) {
+  console.log(data.name);
+}
+```
+
+**After (DeesseJS Functions):**
+```typescript
+const result = await api.users.get({ id: 1 });
+
+if (result.ok) {
+  console.log(result.value.name);
+} else {
+  console.error(result.error);
+}
+```
+
+---
+
+## Migration from React Query
+
+### React Query vs DeesseJS Functions
+
+**React Query approach:**
+```typescript
+import { useQuery } from '@tanstack/react-query';
+
+function User({ id }) {
+  const { data, error, isLoading } = useQuery({
+    queryKey: ['user', id],
+    queryFn: () => fetchUser(id),
+  });
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+
+  return <div>{data.name}</div>;
+}
+```
+
+**DeesseJS Functions approach:**
+```typescript
+import { api } from './api';
+
+function User({ id }) {
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    api.users.get({ id }).then(setResult);
+  }, [id]);
+
+  if (!result) return <div>Loading...</div>;
+
+  if (!result.ok) return <div>Error: {result.error.message}</div>;
+
+  return <div>{result.value.name}</div>;
+}
+```
+
+### Migration Steps
+
+#### Step 1: Define API (Backend)
+
+**Before (React Query):**
+```typescript
+// Define API functions
+export const fetchUser = async (id: number) => {
+  const response = await fetch(`/api/users/${id}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch user');
+  }
+  return response.json();
+};
+
+// Use in component
+const { data } = useQuery({
+  queryKey: ['user', id],
+  queryFn: () => fetchUser(id),
+});
+```
+
+**After (DeesseJS Functions):**
+```typescript
+// Define API with DeesseJS Functions
+const { t, createAPI } = defineContext<Context>({
+  userId: 'user-123',
+  database,
+});
+
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.findById(args.id);
+    return success(user);
+  },
+});
+
+const api = createAPI({ getUser });
+
+// Use in component
+const result = await api.getUser({ id: 1 });
+```
+
+---
+
+## Migration from Express/REST
+
+### Express vs DeesseJS Functions
+
+**Express approach:**
+```typescript
+import express from 'express';
+import { z } from 'zod';
+
+const app = express();
+app.use(express.json());
+
+// Define routes manually
+app.get('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = z.object({ id: z.number() }).parse(req.params);
+    const user = await database.users.findById(id);
+
+    if (!user) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/users', async (req, res) => {
+  try {
+    const input = userSchema.parse(req.body);
+    const user = await database.users.create(input);
+    res.status(201).json(user);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({ error: error.errors });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+```
+
+**DeesseJS Functions approach:**
+```typescript
+import { defineContext, success } from '@deessejs/functions';
+import { z } from 'zod';
+
+const { t, createAPI } = defineContext<Context>({
+  userId: 'user-123',
+  database,
+});
+
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.findById(args.id);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    return success(user);
+  },
+});
+
+const createUser = t.mutation({
+  args: z.object({
+    name: z.string().min(2),
+    email: z.string().email(),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.create(args);
+    return success(user);
+  },
+});
+
+const api = createAPI({ getUser, createUser });
+```
+
+---
+
+## Migration Patterns
+
+### Pattern 1: Endpoint by Endpoint
+
+Migrate one endpoint at a time:
+
+```typescript
+// Old (Express)
+app.get('/api/users/:id', async (req, res) => {
+  const user = await db.users.findById(req.params.id);
+  res.json(user);
+});
+
+// New (DeesseJS Functions)
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.findById(args.id);
+    return success(user);
+  },
+});
+```
+
+### Pattern 2: Gradual Replacement
+
+Keep both systems running during migration:
+
+```typescript
+// ========================================
+// Phase 1: Add DeesseJS alongside Express
+// ========================================
+const { t, createAPI } = defineContext<Context>({
+  userId: 'user-123',
+  database,
+});
+
+const newGetUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    return success(await ctx.database.users.findById(args.id));
+  },
+});
+
+const newApi = createAPI({ getUser: newGetUser });
+
+// Keep Express working
+app.get('/api/users/:id', async (req, res) => {
+  // Use new implementation
+  const result = await newApi.getUser({
+    id: parseInt(req.params.id),
+  });
+
+  if (result.ok) {
+    res.json(result.value);
+  } else {
+    res.status(500).json({ error: result.error.message });
+  }
+});
+
+// Phase 2: Update clients one by one
+// Phase 3: Remove Express routes gradually
+```
+
+### Pattern 3: Reverse Proxy Setup
+
+Use a reverse proxy to route requests:
+
+```typescript
+// Nginx configuration
+server {
+  location /api/v2/ {
+    proxy_pass http://localhost:3000/api; // DeesseJS Functions
+  }
+
+  location /api/ {
+    proxy_pass http://localhost:3001/api; // Express (legacy)
+  }
+}
+```
+
+---
+
+## Migration Checklist
+
+### From tRPC
+
+- [ ] Replace `initTRPC` with `defineContext`
+- [ ] Replace `.router` with `t.router`
+- [ ] Replace `.procedure` with `.query` or `.mutation`
+- [ ] Replace `ctx` usage (tRPC context vs DeesseJS context)
+- [ ] Update client calls to handle result objects
+- [ ] Remove tRPC dependencies
+
+### From React Query
+
+- [ ] Extract query functions
+- [ ] Add Zod validation
+- [ ] Replace `useQuery` with API calls
+- [ ] Update error handling
+- [ ] Remove React Query dependencies
+- [ ] Test thoroughly
+
+### From Express
+
+- [ ] Define context with all middleware
+- [ ] Convert routes to queries/mutations
+- [ ] Add input validation
+- [ ] Update error handling to outcome types
+- [ ] Test all endpoints
+- [ ] Remove Express dependencies
+
+---
+
+## Common Migration Issues
+
+### Issue 1: Context Differences
+
+**tRPC context:**
+```typescript
+const t = initTRPC.context<{ userId: string }>().create();
+
+// Context in procedure
+export const getUser = t.procedure
+  .query(({ ctx }) => {
+    console.log(ctx.userId); // Available
+  });
+```
+
+**DeesseJS Functions context:**
+```typescript
+const { t, createAPI } = defineContext<{
+  userId: string;
+}>({
+  userId: 'user-123',
+});
+
+const getUser = t.query({
+  handler: async (ctx, args) => {
+    console.log(ctx.userId); // Available
+  },
+});
+```
+
+### Issue 2: Error Handling
+
+**tRPC errors:**
+```typescript
+try {
+  await api.user.update({ name: 'Alice' });
+} catch (error) {
+  // Error is thrown
+  console.error(error); // TRPCError
+}
+```
+
+**DeesseJS Functions errors:**
+```typescript
+const result = await api.user.update({ name: 'Alice' });
+
+if (!result.ok) {
+  console.error(result.error); // Error object
+}
+```
+
+### Issue 3: Client Generation
+
+**tRPC:** Auto-generates client with full types
+
+**DeesseJS Functions:** Manual client but same type safety
+
+**Client generation script:**
+```typescript
+// Auto-generate client types
+import { createClient } from './client-generator';
+
+const api = createClient<{
+  users: {
+    get: { input: { id: number }, output: User };
+  };
+}>(definition);
+```
+
+---
+
+## Real-World Migration Example
+
+Let's migrate a complete user management API:
+
+### Before (Express)
+
+```typescript
+import express from 'express';
+import { z } from 'zod';
+
+const app = express();
+app.use(express.json());
+
+// Get user
+app.get('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = z.object({ id: z.coerce().number() }).parse(req.params);
+    const user = await db.users.findById(id);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create user
+app.post('/api/users', async (req, res) => {
+  try {
+    const input = userSchema.parse(req.body);
+    const user = await db.users.create(input);
+
+    res.status(201).json(user);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({ error: error.errors });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update user
+app.put('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = z.object({ id: z.coerce().number() }).parse(req.params);
+    const input = userUpdateSchema.partial().parse(req.body);
+
+    const user = await db.users.findById(id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const updated = await db.users.update(id, input);
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete user
+app.delete('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = z.object({ id: z.coerce().number() }).parse(req.params);
+    const user = await db.users.findById(id);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    await db.users.delete(id);
+    res.status(204).send();
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+```
+
+### After (DeesseJS Functions)
+
+```typescript
+import { defineContext, success, failure, cause, Causes } from '@deessejs/functions';
+import { z } from 'zod';
+
+// Define context once
+const { t, createAPI } = defineContext<{
+  userId: string;
+  database: Database;
+  logger: Logger;
+}>({
+  userId: 'user-123', // From session
+  database,
+  logger,
+});
+
+// Get user
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.findById(args.id);
+
+    if (!user) {
+      return failureOutcome(
+        Causes.notFound(args.id, 'User')
+      );
+    }
+
+    return successOutcome(user);
+  },
+});
+
+// Create user
+const createUser = t.mutation({
+  args: z.object({
+    name: z.string().min(2),
+    email: z.string().email(),
+  }),
+  handler: async (ctx, args) => {
+    // Check for duplicate email
+    const existing = await ctx.database.users.findByEmail(args.email);
+    if (existing) {
+      return failureOutcome(
+        cause({
+          name: 'DuplicateEmail',
+          message: `Email ${args.email} already exists`,
+        })
+      );
+    }
+
+    const user = await ctx.database.users.create({
+      ...args,
+      createdAt: new Date(),
+    });
+
+    ctx.logger.info('User created', { userId: user.id });
+
+    return successOutcome(user);
+  },
+})
+  .onError(async (ctx, args, error) => {
+    ctx.logger.error('Failed to create user', { args, error });
+  });
+
+// Update user
+const updateUser = t.mutation({
+  args: z.object({
+    id: z.number(),
+    name: z.string().optional(),
+    email: z.string().email().optional(),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.findById(args.id);
+
+    if (!user) {
+      return failureOutcome(
+        Causes.notFound(args.id, 'User')
+      );
+    }
+
+    const updated = await ctx.database.users.update(args.id, {
+      ...args,
+      updatedAt: new Date(),
+    });
+
+    return successOutcome(updated);
+  },
+})
+  .beforeInvoke(async (ctx, args) => {
+    ctx.logger.info('Updating user', { id: args.id });
+  })
+  .onSuccess(async (ctx, args, data) => {
+    ctx.logger.info('User updated', { id: data.id });
+  });
+
+// Delete user
+const deleteUser = t.mutation({
+  args: z.object({
+    id: z.number(),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.findById(args.id);
+
+    if (!user) {
+      return failureOutcome(
+        Causes.notFound(args.id, 'User')
+      );
+    }
+
+    await ctx.database.users.delete(args.id);
+
+    ctx.logger.info('User deleted', { id: args.id });
+
+    return successOutcome({ deleted: true });
+  },
+})
+  .beforeInvoke(async (ctx, args) => {
+    ctx.logger.info('Deleting user', { id: args.id });
+  });
+
+// Combine into API
+const api = createAPI({
+  users: t.router({
+    get: getUser,
+    create: createUser,
+    update: updateUser,
+    delete: deleteUser,
+  }),
+});
+```
+
+---
+
+## Client Side Migration
+
+### Before (tRPC)
+
+```typescript
+// Component using tRPC
+import { trpc } from '@/utils/trpc';
+
+export function UserProfile({ userId }: { userId: number }) {
+  const { data } = trpc.users.get.useQuery(
+    { id: userId },
+    { trpc: { abortOnUnmount: false } }
+  );
+
+  return <div>{data?.name}</div>;
+}
+```
+
+### After (DeesseJS Functions)
+
+```typescript
+// Component using DeesseJS Functions
+import { api } from '@/api';
+
+export function UserProfile({ userId }: { userId: number }) {
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    api.users.get({ id: userId }).then(setResult);
+  }, [userId]);
+
+  if (!result) {
+    return <div>Loading...</div>;
+  }
+
+  if (!result.ok) {
+    return <div>Error: {result.error.message}</div>;
+  }
+
+  return <div>{result.value.name}</div>;
+}
+```
+
+---
+
+## Gradual Migration Strategy
+
+### Phase 1: Add DeesseJS Functions Alongside
+
+```typescript
+// Keep existing Express routes
+app.get('/api/v1/users/*', expressRouter);
+
+// Add new DeesseJS Functions routes
+app.all('/api/v2/*', async (req, res) => {
+  // Delegate to DeesseJS Functions API
+  const result = await api.handleRequest(req);
+
+  if (result.ok) {
+    return res.json(result.value);
+  }
+
+  return res.status(500).json({ error: result.error.message });
+});
+```
+
+### Phase 2: Update Clients Gradually
+
+```typescript
+// Start using new API for new features
+const NewFeature = () => {
+  const result = await api.newFeature.get({});
+
+  if (result.ok) {
+    return result.value;
+  }
+};
+
+// Keep old API for existing features
+const OldFeature = () => {
+  const response = await fetch('/api/v1/oldFeature');
+  return response.json();
+};
+```
+
+### Phase 3: Complete Migration
+
+```typescript
+// Once all clients are updated, remove old code
+app.get('/api/v1/*', (req, res) => {
+  res.status(410).json({ error: 'Deprecated API' });
+});
+```
+
+---
+
+## Migration Best Practices
+
+### ✅ DO: Migrate Incrementally
+
+1. Start with read-only endpoints (queries)
+2. Add write endpoints (mutations) next
+3. Migrate clients one component at a time
+4. Run both systems in parallel during transition
+
+### ✅ DO: Test Thoroughly
+
+1. Write tests for old and new implementations
+2. Compare outputs to ensure consistency
+3. Load test both systems
+4. Monitor for performance differences
+
+### ✅ DO: Document the Migration
+
+1. Create migration guide for your team
+2. Document API differences
+3. Provide before/after examples
+4. Share common patterns and gotchas
+
+### ❌ DON'T: Rewrite Everything at Once
+
+Breaking changes across the entire codebase is risky:
+- High chance of introducing bugs
+- Difficult to debug
+- Hard to roll back if something goes wrong
+
+---
+
+## What's Next?
+
+**Congratulations!** You've completed the entire DeesseJS Functions course! 🎉
+
+From here, you can:
+- Dive deeper into specific topics
+- Build your own API
+- Contribute to the framework
+- Explore advanced examples
+
+Thank you for learning with us!
+
+---
+
+## Course Recap
+
+In this final chapter, you learned:
+- ✅ Migration from tRPC
+- ✅ Migration from React Query
+- ✅ Migration from Express/REST
+- ✅ Common migration patterns
+- ✅ Gradual migration strategies
+- ✅ Complete migration example
+
+**You're now ready to build production-ready, type-safe APIs!** 🚀
+
+---
+
+## Additional Resources
+
+- **Documentation:** [/docs](/docs)
+- **API Reference:** [/docs/api](/docs/api)
+- **Examples:** [/examples](/examples)
+- **GitHub:** [github.com/nesalia-inc/functions](https://github.com/nesalia-inc/functions)
+
+---
+
+**Happy coding!** 🎉

@@ -1,0 +1,594 @@
+---
+title: Chapter 4
+description: Master queries - reading data with confidence
+---
+
+# Chapter 4: Queries - Reading Data
+
+Queries are how your API reads data. They're fast, type-safe, and optimized for caching. In this chapter, you'll master everything about queries.
+
+## What you'll learn in this chapter
+
+- What makes a query different from a mutation
+- Creating queries with validation
+- Advanced query patterns
+- Query composition and reusability
+- Performance tips
+
+**Estimated reading time:** 25 minutes
+
+---
+
+## Queries vs Mutations
+
+Before diving in, let's clarify the difference:
+
+| **Queries** | **Mutations** |
+|-------------|---------------|
+| **Read** data | **Write** data |
+| Cacheable | Not cacheable |
+| Idempotent (same input = same output) | Can change state |
+| No side effects | Side effects allowed |
+| Fast (can be prefetched) | Slower (require validation) |
+
+**Simple rule:** If it changes data, use a mutation. If it just reads, use a query.
+
+---
+
+## Your First Query
+
+### Basic Query Structure
+
+```typescript
+const getUser = t.query({
+  args: z.object({
+    id: z.number(),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.findById(args.id);
+    return success(user);
+  },
+});
+```
+
+**Breaking it down:**
+
+1. **`t.query`** - Creates a query (not a mutation)
+2. **`args`** - Input validation with Zod
+3. **`handler`** - The function that runs when query is called
+4. **`ctx`** - Your context (userId, database, etc.)
+5. **`args`** - Validated input `{ id: number }`
+6. **`success()`** - Wrap successful results
+
+---
+
+## Query Validation
+
+Queries automatically validate input using Zod:
+
+```typescript
+const getUserByEmail = t.query({
+  args: z.object({
+    email: z.string().email(),
+    includeProfile: z.boolean().optional(),
+  }),
+  handler: async (ctx, args) => {
+    // TypeScript knows:
+    // - args.email is a string (validated)
+    // - args.includeProfile is boolean | undefined
+
+    const user = await ctx.database.users.findByEmail(args.email);
+
+    if (args.includeProfile) {
+      user.profile = await ctx.database.profiles.findByUser(user.id);
+    }
+
+    return success(user);
+  },
+});
+```
+
+**If validation fails:**
+```typescript
+const result = await api.getUserByEmail({
+  email: 'not-an-email', // ❌ Invalid!
+});
+
+console.log(result.ok); // false
+console.log(result.error); // ValidationError with details
+```
+
+> **Good to know:** Validation happens **before** your handler runs. Failed validation = handler never executes.
+
+---
+
+## Advanced Query Patterns
+
+### Pattern 1: Optional Arguments
+
+```typescript
+const searchUsers = t.query({
+  args: z.object({
+    query: z.string().min(2),
+    limit: z.number().min(1).max(100).default(20),
+    offset: z.number().default(0),
+    sortBy: z.enum(['name', 'email', 'created']).default('created'),
+  }),
+  handler: async (ctx, args) => {
+    const users = await ctx.database.users.search({
+      query: args.query,
+      limit: args.limit,
+      offset: args.offset,
+      sortBy: args.sortBy,
+    });
+
+    return success(users);
+  },
+});
+```
+
+**Usage:**
+```typescript
+// All defaults
+await api.searchUsers({ query: 'alice' });
+
+// Override some
+await api.searchUsers({ query: 'alice', limit: 10 });
+
+// Override all
+await api.searchUsers({
+  query: 'alice',
+  limit: 50,
+  offset: 100,
+  sortBy: 'name',
+});
+```
+
+### Pattern 2: Complex Objects
+
+```typescript
+const getPostWithComments = t.query({
+  args: z.object({
+    postId: z.number(),
+    include: z.object({
+      author: z.boolean().default(false),
+      comments: z.boolean().default(false),
+      metadata: z.boolean().default(false),
+    }),
+  }),
+  handler: async (ctx, args) => {
+    const post = await ctx.database.posts.findById(args.postId);
+
+    if (args.include.author) {
+      post.author = await ctx.database.users.findById(post.authorId);
+    }
+
+    if (args.include.comments) {
+      post.comments = await ctx.database.comments.findByPost(post.id);
+    }
+
+    if (args.include.metadata) {
+      post.metadata = await ctx.database.metadata.get(post.id);
+    }
+
+    return success(post);
+  },
+});
+```
+
+### Pattern 3: Array Arguments
+
+```typescript
+const getMultipleUsers = t.query({
+  args: z.object({
+    ids: z.array(z.number()).min(1).max(50),
+  }),
+  handler: async (ctx, args) => {
+    // TypeScript knows args.ids is number[]
+    const users = await ctx.database.users.findByIds(args.ids);
+    return success(users);
+  },
+});
+```
+
+**Usage:**
+```typescript
+await api.getMultipleUsers({ ids: [1, 2, 3, 4, 5] });
+
+// ❌ Type error! Must be array of numbers
+await api.getMultipleUsers({ ids: ['1', '2', '3'] });
+```
+
+### Pattern 4: Union Types
+
+```typescript
+const getData = t.query({
+  args: z.object({
+    type: z.enum(['user', 'post', 'comment']),
+    id: z.number(),
+  }),
+  handler: async (ctx, args) => {
+    switch (args.type) {
+      case 'user':
+        return success(await ctx.database.users.findById(args.id));
+      case 'post':
+        return success(await ctx.database.posts.findById(args.id));
+      case 'comment':
+        return success(await ctx.database.comments.findById(args.id));
+    }
+  },
+});
+```
+
+---
+
+## Query Composition
+
+### Reusable Query Logic
+
+Extract common query logic into reusable functions:
+
+```typescript
+// Generic pagination
+function withPagination<T extends { id: number }>(
+  items: T[],
+  args: { limit: number; offset: number }
+) {
+  return {
+    items: items.slice(args.offset, args.offset + args.limit),
+    total: items.length,
+    hasMore: args.offset + args.limit < items.length,
+  };
+}
+
+// Use in queries
+const getUsers = t.query({
+  args: z.object({
+    limit: z.number().default(20),
+    offset: z.number().default(0),
+  }),
+  handler: async (ctx, args) => {
+    const allUsers = await ctx.database.users.findAll();
+    return success(withPagination(allUsers, args));
+  },
+});
+```
+
+### Query Wrappers
+
+Create query wrappers for common patterns:
+
+```typescript
+// Query wrapper for "not found" handling
+function createNotFoundQuery<T>(
+  fetcher: (id: number) => Promise<T | null>,
+  resourceName: string
+) {
+  return t.query({
+    args: z.object({ id: z.number() }),
+    handler: async (ctx, args) => {
+      const result = await fetcher(args.id);
+
+      if (!result) {
+        throw new Error(`${resourceName} ${args.id} not found`);
+      }
+
+      return success(result);
+    },
+  });
+}
+
+// Use the wrapper
+const getUser = createNotFoundQuery(
+  (id) => ctx.database.users.findById(id),
+  'User'
+);
+
+const getPost = createNotFoundQuery(
+  (id) => ctx.database.posts.findById(id),
+  'Post'
+);
+```
+
+---
+
+## Performance Tips
+
+### ✅ Tip 1: Select Only What You Need
+
+```typescript
+// ❌ Bad - Always fetches everything
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.findById(args.id);
+    user.profile = await ctx.database.profiles.findByUser(user.id);
+    user.settings = await ctx.database.settings.findByUser(user.id);
+    user.posts = await ctx.database.posts.findByUser(user.id);
+    // ... 10 more relations
+    return success(user);
+  },
+});
+
+// ✅ Good - Fetch only what's requested
+const getUser = t.query({
+  args: z.object({
+    id: z.number(),
+    include: z.object({
+      profile: z.boolean().default(false),
+      settings: z.boolean().default(false),
+      posts: z.boolean().default(false),
+    }),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.findById(args.id);
+
+    if (args.include.profile) {
+      user.profile = await ctx.database.profiles.findByUser(user.id);
+    }
+
+    if (args.include.settings) {
+      user.settings = await ctx.database.settings.findByUser(user.id);
+    }
+
+    if (args.include.posts) {
+      user.posts = await ctx.database.posts.findByUser(user.id);
+    }
+
+    return success(user);
+  },
+});
+```
+
+### ✅ Tip 2: Use Database Indexes
+
+```typescript
+const getUserByEmail = t.query({
+  args: z.object({ email: z.string().email() }),
+  handler: async (ctx, args) => {
+    // Ensure email column is indexed in database!
+    const user = await ctx.database.users.findByEmail(args.email);
+    return success(user);
+  },
+});
+```
+
+### ✅ Tip 3: Limit Result Sizes
+
+```typescript
+const searchPosts = t.query({
+  args: z.object({
+    query: z.string().min(2),
+    limit: z.number().min(1).max(100).default(20), // Always limit!
+  }),
+  handler: async (ctx, args) => {
+    const results = await ctx.database.posts.search(args.query, {
+      limit: args.limit,
+    });
+    return success(results);
+  },
+});
+```
+
+---
+
+## Common Query Pitfalls
+
+### ❌ Pitfall 1: Not Using Validation
+
+```typescript
+// ❌ Bad - No validation
+const getUser = t.query({
+  args: z.object({}), // Empty!
+  handler: async (ctx, args) => {
+    // args could be anything!
+    const id = (args as any).id; // ❌ Unsafe!
+  },
+});
+
+// ✅ Good - Proper validation
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    // args.id is guaranteed to be a number
+    return success(await ctx.database.users.findById(args.id));
+  },
+});
+```
+
+### ❌ Pitfall 2: Side Effects in Queries
+
+```typescript
+// ❌ Bad - Query has side effects!
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.findById(args.id);
+
+    // ❌ Don't do this in a query!
+    await ctx.database.users.updateLastViewed(args.id);
+
+    return success(user);
+  },
+});
+
+// ✅ Good - Use a mutation for side effects
+const markUserAsViewed = t.mutation({
+  args: z.object({ userId: z.number() }),
+  handler: async (ctx, args) => {
+    await ctx.database.users.updateLastViewed(args.userId);
+    return success({ viewed: true });
+  },
+});
+```
+
+### ❌ Pitfall 3: Ignoring Errors
+
+```typescript
+// ❌ Bad - Errors crash everything
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.findById(args.id); // Could throw!
+    return success(user);
+  },
+});
+
+// ✅ Good - Handle errors gracefully
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    try {
+      const user = await ctx.database.users.findById(args.id);
+
+      if (!user) {
+        throw new Error(`User ${args.id} not found`);
+      }
+
+      return success(user);
+    } catch (error) {
+      // Log and re-throw with context
+      ctx.logger.error('Failed to fetch user', { id: args.id, error });
+      throw error;
+    }
+  },
+});
+```
+
+---
+
+## Real-World Example
+
+Let's build a practical query for a blog API:
+
+```typescript
+const getPosts = t.query({
+  args: z.object({
+    // Filters
+    authorId: z.number().optional(),
+    tag: z.string().optional(),
+    search: z.string().optional(),
+
+    // Pagination
+    limit: z.number().min(1).max(100).default(20),
+    page: z.number().min(1).default(1),
+
+    // Sorting
+    sortBy: z.enum(['created', 'updated', 'title']).default('created'),
+    order: z.enum(['asc', 'desc']).default('desc'),
+
+    // Includes
+    includeAuthor: z.boolean().default(false),
+    includeTags: z.boolean().default(false),
+    includeCommentCount: z.boolean().default(false),
+  }),
+  handler: async (ctx, args) => {
+    // Calculate offset from page
+    const offset = (args.page - 1) * args.limit;
+
+    // Build query
+    let query = ctx.database.posts.query();
+
+    // Apply filters
+    if (args.authorId) {
+      query = query.where('authorId', args.authorId);
+    }
+
+    if (args.tag) {
+      query = query.whereHasTag(args.tag);
+    }
+
+    if (args.search) {
+      query = query.whereSearch('title', args.search);
+    }
+
+    // Apply sorting
+    query = query.orderBy(args.sortBy, args.order);
+
+    // Get paginated results
+    const posts = await query
+      .limit(args.limit)
+      .offset(offset)
+      .getMany();
+
+    // Enrich results if requested
+    if (args.includeAuthor || args.includeTags || args.includeCommentCount) {
+      for (const post of posts) {
+        if (args.includeAuthor) {
+          post.author = await ctx.database.users.findById(post.authorId);
+        }
+
+        if (args.includeTags) {
+          post.tags = await ctx.database.tags.findByPost(post.id);
+        }
+
+        if (args.includeCommentCount) {
+          post.commentCount = await ctx.database.comments.countByPost(post.id);
+        }
+      }
+    }
+
+    // Get total count for pagination
+    const total = await query.count();
+
+    return success({
+      posts,
+      pagination: {
+        page: args.page,
+        limit: args.limit,
+        total,
+        totalPages: Math.ceil(total / args.limit),
+        hasNext: args.page * args.limit < total,
+        hasPrev: args.page > 1,
+      },
+    });
+  },
+});
+```
+
+**Usage:**
+```typescript
+// Simple: latest posts
+const result = await api.getPosts({});
+
+// Filtered: posts by author
+const result = await api.getPosts({
+  authorId: 123,
+  limit: 10,
+});
+
+// Search with includes
+const result = await api.getPosts({
+  search: 'typescript',
+  includeAuthor: true,
+  includeTags: true,
+  sortBy: 'title',
+  order: 'asc',
+});
+```
+
+---
+
+## What's Next?
+
+You've mastered queries! In **Chapter 5**, you'll learn:
+- How mutations differ from queries
+- Creating write operations
+- Transaction patterns
+- Mutation best practices
+
+Ready to write some data? Let's go! 🚀
+
+---
+
+## Chapter Recap
+
+You learned:
+- ✅ The difference between queries and mutations
+- ✅ How to create queries with validation
+- ✅ Advanced query patterns (optional args, complex objects, arrays)
+- ✅ Query composition and reusability
+- ✅ Performance tips and common pitfalls
+- ✅ Real-world blog API example
+
+**Next up:** [Chapter 5: Mutations](/learn/part-2-core-concepts/chapter-5-mutations) →

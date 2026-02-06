@@ -1,0 +1,848 @@
+---
+title: Chapter 6
+description: Organize your API with routers
+---
+
+# Chapter 6: Routers - Organizing Your API
+
+As your API grows, you need a way to organize endpoints logically. Routers are the solution - they let you group related endpoints, create nested structures, and keep your API maintainable at any scale.
+
+## What you'll learn in this chapter
+
+- What routers are and when to use them
+- Creating nested API structures
+- Router composition patterns
+- Best practices for large APIs
+- Real-world API organization
+
+**Estimated reading time:** 30 minutes
+
+---
+
+## What is a Router?
+
+A **router** groups related endpoints together under a common path. Think of it like organizing files into folders - related things go together.
+
+### Without Routers
+
+```typescript
+const api = createAPI({
+  // Everything is flat
+  getUser: t.query({ /* ... */ }),
+  updateUser: t.mutation({ /* ... */ }),
+  deleteUser: t.mutation({ /* ... */ }),
+  getPosts: t.query({ /* ... */ }),
+  createPost: t.mutation({ /* ... */ }),
+  updatePost: t.mutation({ /* ... */ }),
+  deletePost: t.mutation({ /* ... */ }),
+  getComments: t.query({ /* ... */ }),
+  createComment: t.mutation({ /* ... */ }),
+  // ... 50 more endpoints
+});
+```
+
+This gets messy fast!
+
+### With Routers
+
+```typescript
+const api = createAPI({
+  users: t.router({
+    get: t.query({ /* ... */ }),
+    update: t.mutation({ /* ... */ }),
+    delete: t.mutation({ /* ... */ }),
+  }),
+  posts: t.router({
+    get: t.query({ /* ... */ }),
+    create: t.mutation({ /* ... */ }),
+    update: t.mutation({ /* ... */ }),
+    delete: t.mutation({ /* ... */ }),
+  }),
+  comments: t.router({
+    get: t.query({ /* ... */ }),
+    create: t.mutation({ /* ... */ }),
+  }),
+});
+```
+
+Organized and clear!
+
+---
+
+## Your First Router
+
+### Basic Router Structure
+
+```typescript
+const userRouter = t.router({
+  // Queries
+  get: t.query({
+    args: z.object({ id: z.number() }),
+    handler: async (ctx, args) => {
+      return success(await ctx.database.users.findById(args.id));
+    },
+  }),
+
+  list: t.query({
+    args: z.object({
+      limit: z.number().default(20),
+      offset: z.number().default(0),
+    }),
+    handler: async (ctx, args) => {
+      return success(await ctx.database.users.findAll(args));
+    },
+  }),
+
+  // Mutations
+  create: t.mutation({
+    args: z.object({
+      name: z.string().min(2),
+      email: z.string().email(),
+    }),
+    handler: async (ctx, args) => {
+      return success(await ctx.database.users.create(args));
+    },
+  }),
+
+  update: t.mutation({
+    args: z.object({
+      id: z.number(),
+      name: z.string().min(2).optional(),
+      email: z.string().email().optional(),
+    }),
+    handler: async (ctx, args) => {
+      return success(await ctx.database.users.update(args.id, args));
+    },
+  }),
+
+  delete: t.mutation({
+    args: z.object({ id: z.number() }),
+    handler: async (ctx, args) => {
+      return success(await ctx.database.users.delete(args.id));
+    },
+  }),
+});
+```
+
+**Usage:**
+```typescript
+// Access endpoints
+await api.users.get({ id: 1 });
+await api.users.list({ limit: 10 });
+await api.users.create({ name: 'Alice', email: 'alice@example.com' });
+await api.users.update({ id: 1, name: 'Alice Updated' });
+await api.users.delete({ id: 1 });
+```
+
+---
+
+## Nested Routers
+
+Routers can contain other routers, creating **nested structures**:
+
+```typescript
+const api = createAPI({
+  users: t.router({
+    // User queries
+    profile: t.router({
+      get: t.query({ /* Get user profile */ }),
+      update: t.mutation({ /* Update profile */ }),
+      delete: t.mutation({ /* Delete profile */ }),
+    }),
+
+    // User settings
+    settings: t.router({
+      get: t.query({ /* Get settings */ }),
+      update: t.mutation({ /* Update settings */ }),
+      reset: t.mutation({ /* Reset to defaults */ }),
+    }),
+
+    // User posts
+    posts: t.router({
+      list: t.query({ /* Get user's posts */ }),
+      create: t.mutation({ /* Create post */ }),
+    }),
+  }),
+
+  posts: t.router({
+    // Post operations
+    get: t.query({ /* Get single post */ }),
+    list: t.query({ /* List all posts */ }),
+    create: t.mutation({ /* Create post */ }),
+
+    // Post comments
+    comments: t.router({
+      list: t.query({ /* Get post comments */ }),
+      create: t.mutation({ /* Add comment */ }),
+      delete: t.mutation({ /* Delete comment */ }),
+    }),
+  }),
+});
+```
+
+**Usage:**
+```typescript
+// Nested paths
+await api.users.profile.get({ id: 1 });
+await api.users.profile.update({ id: 1, name: 'Updated' });
+await api.users.settings.get();
+await api.users.posts.create({ title: 'Hello' });
+
+await api.posts.comments.list({ postId: 1 });
+await api.posts.comments.create({ postId: 1, content: 'Nice!' });
+```
+
+---
+
+## Router Composition
+
+### Pattern 1: Combine Existing Routers
+
+```typescript
+// Create focused routers
+const userQueries = t.router({
+  get: t.query({ /* ... */ }),
+  list: t.query({ /* ... */ }),
+});
+
+const userMutations = t.router({
+  create: t.mutation({ /* ... */ }),
+  update: t.mutation({ /* ... */ }),
+  delete: t.mutation({ /* ... */ }),
+});
+
+// Combine them
+const userRouter = t.router({
+  ...userQueries,
+  ...userMutations,
+});
+
+// Or nest them
+const api = createAPI({
+  users: t.router({
+    ...userQueries,
+    ...userMutations,
+  }),
+});
+```
+
+### Pattern 2: Modular Router Files
+
+**File: `src/routers/users.ts`**
+```typescript
+import { t } from '../context';
+
+export const userRouter = t.router({
+  get: t.query({
+    args: z.object({ id: z.number() }),
+    handler: async (ctx, args) => {
+      return success(await ctx.database.users.findById(args.id));
+    },
+  }),
+
+  create: t.mutation({
+    args: z.object({
+      name: z.string().min(2),
+      email: z.string().email(),
+    }),
+    handler: async (ctx, args) => {
+      return success(await ctx.database.users.create(args));
+    },
+  }),
+});
+```
+
+**File: `src/routers/posts.ts`**
+```typescript
+import { t } from '../context';
+
+export const postRouter = t.router({
+  get: t.query({
+    args: z.object({ id: z.number() }),
+    handler: async (ctx, args) => {
+      return success(await ctx.database.posts.findById(args.id));
+    },
+  }),
+
+  create: t.mutation({
+    args: z.object({
+      title: z.string().min(5),
+      content: z.string().min(10),
+    }),
+    handler: async (ctx, args) => {
+      return success(await ctx.database.posts.create({
+        ...args,
+        authorId: ctx.userId,
+      }));
+    },
+  }),
+});
+```
+
+**File: `src/api.ts`**
+```typescript
+import { createAPI } from './context';
+import { userRouter } from './routers/users';
+import { postRouter } from './routers/posts';
+
+export const api = createAPI({
+  users: userRouter,
+  posts: postRouter,
+});
+```
+
+---
+
+## Real-World API Structure
+
+Here's how a large-scale blog API might be organized:
+
+```typescript
+export const api = createAPI({
+  // ===================
+  // AUTHENTICATION
+  // ===================
+  auth: t.router({
+    register: t.mutation({
+      args: z.object({
+        email: z.string().email(),
+        password: z.string().min(8),
+        name: z.string().min(2),
+      }),
+      handler: async (ctx, args) => {
+        // Registration logic
+      },
+    }),
+
+    login: t.mutation({
+      args: z.object({
+        email: z.string().email(),
+        password: z.string(),
+      }),
+      handler: async (ctx, args) => {
+        // Login logic
+      },
+    }),
+
+    logout: t.mutation({
+      args: z.object({}),
+      handler: async (ctx, args) => {
+        // Logout logic
+      },
+    }),
+
+    refresh: t.mutation({
+      args: z.object({
+        token: z.string(),
+      }),
+      handler: async (ctx, args) => {
+        // Token refresh logic
+      },
+    }),
+
+    resetPassword: t.mutation({
+      args: z.object({
+        email: z.string().email(),
+      }),
+      handler: async (ctx, args) => {
+        // Password reset logic
+      },
+    }),
+  }),
+
+  // ===================
+  // USERS
+  // ===================
+  users: t.router({
+    profile: t.router({
+      get: t.query({
+        args: z.object({ id: z.number() }),
+        handler: async (ctx, args) => {
+          return success(await ctx.database.users.findById(args.id));
+        },
+      }),
+
+      update: t.mutation({
+        args: z.object({
+          id: z.number(),
+          name: z.string().min(2).optional(),
+          bio: z.string().max(500).optional(),
+          avatar: z.string().url().optional(),
+        }),
+        handler: async (ctx, args) => {
+          return success(await ctx.database.users.update(args.id, args));
+        },
+      }),
+
+      delete: t.mutation({
+        args: z.object({ id: z.number() }),
+        handler: async (ctx, args) => {
+          return success(await ctx.database.users.delete(args.id));
+        },
+      }),
+    }),
+
+    settings: t.router({
+      get: t.query({
+        args: z.object({ userId: z.number() }),
+        handler: async (ctx, args) => {
+          return success(await ctx.database.settings.findByUser(args.userId));
+        },
+      }),
+
+      update: t.mutation({
+        args: z.object({
+          theme: z.enum(['light', 'dark', 'auto']).optional(),
+          emailNotifications: z.boolean().optional(),
+          language: z.string().optional(),
+        }),
+        handler: async (ctx, args) => {
+          return success(await ctx.database.settings.update(ctx.userId, args));
+        },
+      }),
+
+      notifications: t.router({
+        list: t.query({
+          args: z.object({
+            userId: z.number(),
+            unreadOnly: z.boolean().default(false),
+          }),
+          handler: async (ctx, args) => {
+            return success(await ctx.database.notifications.findByUser(args.userId, args));
+          },
+        }),
+
+        markAsRead: t.mutation({
+          args: z.object({
+            notificationId: z.number(),
+          }),
+          handler: async (ctx, args) => {
+            return success(await ctx.database.notifications.markAsRead(args.notificationId));
+          },
+        }),
+
+        markAllAsRead: t.mutation({
+          args: z.object({}),
+          handler: async (ctx, args) => {
+            return success(await ctx.database.notifications.markAllAsRead(ctx.userId));
+          },
+        }),
+      }),
+    }),
+
+    following: t.router({
+      follow: t.mutation({
+        args: z.object({
+          userId: z.number(),
+        }),
+        handler: async (ctx, args) => {
+          return success(await ctx.database.following.follow(ctx.userId, args.userId));
+        },
+      }),
+
+      unfollow: t.mutation({
+        args: z.object({
+          userId: z.number(),
+        }),
+        handler: async (ctx, args) => {
+          return success(await ctx.database.following.unfollow(ctx.userId, args.userId));
+        },
+      }),
+
+      followers: t.query({
+        args: z.object({
+          userId: z.number(),
+        }),
+        handler: async (ctx, args) => {
+          return success(await ctx.database.following.getFollowers(args.userId));
+        },
+      }),
+    }),
+  }),
+
+  // ===================
+  // POSTS
+  // ===================
+  posts: t.router({
+    get: t.query({
+      args: z.object({
+        id: z.number(),
+        includeAuthor: z.boolean().default(false),
+        includeComments: z.boolean().default(false),
+      }),
+      handler: async (ctx, args) => {
+        const post = await ctx.database.posts.findById(args.id);
+
+        if (args.includeAuthor) {
+          post.author = await ctx.database.users.findById(post.authorId);
+        }
+
+        if (args.includeComments) {
+          post.comments = await ctx.database.comments.findByPost(args.id);
+        }
+
+        return success(post);
+      },
+    }),
+
+    list: t.query({
+      args: z.object({
+        limit: z.number().min(1).max(100).default(20),
+        offset: z.number().default(0),
+        authorId: z.number().optional(),
+        tag: z.string().optional(),
+      }),
+      handler: async (ctx, args) => {
+        return success(await ctx.database.posts.findAll(args));
+      },
+    }),
+
+    create: t.mutation({
+      args: z.object({
+        title: z.string().min(5).max(200),
+        content: z.string().min(10),
+        tags: z.array(z.string()).optional(),
+        published: z.boolean().default(false),
+      }),
+      handler: async (ctx, args) => {
+        return success(await ctx.database.posts.create({
+          ...args,
+          authorId: ctx.userId,
+        }));
+      },
+    }),
+
+    update: t.mutation({
+      args: z.object({
+        id: z.number(),
+        title: z.string().min(5).max(200).optional(),
+        content: z.string().min(10).optional(),
+        tags: z.array(z.string()).optional(),
+        published: z.boolean().optional(),
+      }),
+      handler: async (ctx, args) => {
+        // Verify ownership
+        const post = await ctx.database.posts.findById(args.id);
+        if (post.authorId !== ctx.userId) {
+          throw new Error('You can only edit your own posts');
+        }
+
+        return success(await ctx.database.posts.update(args.id, args));
+      },
+    }),
+
+    delete: t.mutation({
+      args: z.object({
+        id: z.number(),
+      }),
+      handler: async (ctx, args) => {
+        // Verify ownership
+        const post = await ctx.database.posts.findById(args.id);
+        if (post.authorId !== ctx.userId) {
+          throw new Error('You can only delete your own posts');
+        }
+
+        return success(await ctx.database.posts.delete(args.id));
+      },
+    }),
+
+    comments: t.router({
+      list: t.query({
+        args: z.object({
+          postId: z.number(),
+          limit: z.number().default(20),
+        }),
+        handler: async (ctx, args) => {
+          return success(await ctx.database.comments.findByPost(args.postId, args.limit));
+        },
+      }),
+
+      create: t.mutation({
+        args: z.object({
+          postId: z.number(),
+          content: z.string().min(1).max(1000),
+        }),
+        handler: async (ctx, args) => {
+          return success(await ctx.database.comments.create({
+            postId: args.postId,
+            content: args.content,
+            authorId: ctx.userId,
+          }));
+        },
+      }),
+
+      delete: t.mutation({
+        args: z.object({
+          id: z.number(),
+        }),
+        handler: async (ctx, args) => {
+          // Verify ownership
+          const comment = await ctx.database.comments.findById(args.id);
+          if (comment.authorId !== ctx.userId) {
+            throw new Error('You can only delete your own comments');
+          }
+
+          return success(await ctx.database.comments.delete(args.id));
+        },
+      }),
+    }),
+  }),
+
+  // ===================
+  // TAGS
+  // ===================
+  tags: t.router({
+    list: t.query({
+      args: z.object({}),
+      handler: async (ctx, args) => {
+        return success(await ctx.database.tags.findAll());
+      },
+    }),
+
+    popular: t.query({
+      args: z.object({
+        limit: z.number().default(10),
+      }),
+      handler: async (ctx, args) => {
+        return success(await ctx.database.tags.getPopular(args.limit));
+      },
+    }),
+
+    create: t.mutation({
+      args: z.object({
+        name: z.string().min(2).max(50),
+        slug: z.string().min(2).max(50),
+        color: z.string().regex(/^#[0-9A-F]{6}$/i),
+      }),
+      handler: async (ctx, args) => {
+        return success(await ctx.database.tags.create(args));
+      },
+    }),
+  }),
+
+  // ===================
+  // SEARCH
+  // ===================
+  search: t.router({
+    posts: t.query({
+      args: z.object({
+        query: z.string().min(2),
+        limit: z.number().default(20),
+      }),
+      handler: async (ctx, args) => {
+        return success(await ctx.database.search.posts(args.query, args.limit));
+      },
+    }),
+
+    users: t.query({
+      args: z.object({
+        query: z.string().min(2),
+        limit: z.number().default(20),
+      }),
+      handler: async (ctx, args) => {
+        return success(await ctx.database.search.users(args.query, args.limit));
+      },
+    }),
+  }),
+
+  // ===================
+  // ADMIN
+  // ===================
+  admin: t.router({
+    stats: t.query({
+      args: z.object({}),
+      handler: async (ctx, args) => {
+        // Verify admin
+        if (ctx.userRole !== 'admin') {
+          throw new Error('Admin only');
+        }
+
+        return success({
+          totalUsers: await ctx.database.users.count(),
+          totalPosts: await ctx.database.posts.count(),
+          totalComments: await ctx.database.comments.count(),
+        });
+      },
+    }),
+
+    users: t.router({
+      listAll: t.query({
+        args: z.object({
+          limit: z.number().default(100),
+          offset: z.number().default(0),
+        }),
+        handler: async (ctx, args) => {
+          if (ctx.userRole !== 'admin') {
+            throw new Error('Admin only');
+          }
+
+          return success(await ctx.database.users.findAll(args));
+        },
+      }),
+
+      ban: t.mutation({
+        args: z.object({
+          userId: z.number(),
+          reason: z.string(),
+        }),
+        handler: async (ctx, args) => {
+          if (ctx.userRole !== 'admin') {
+            throw new Error('Admin only');
+          }
+
+          return success(await ctx.database.users.ban(args.userId, args.reason));
+        },
+      }),
+    }),
+  }),
+});
+```
+
+---
+
+## Router Best Practices
+
+### ✅ DO: Group Related Endpoints
+
+```typescript
+// ✅ Good - Logical grouping
+const userRouter = t.router({
+  // Profile
+  get: t.query({ /* ... */ }),
+  update: t.mutation({ /* ... */ }),
+
+  // Settings
+  settings: t.router({
+    get: t.query({ /* ... */ }),
+    update: t.mutation({ /* ... */ }),
+  }),
+
+  // Posts
+  posts: t.router({
+    list: t.query({ /* ... */ }),
+    create: t.mutation({ /* ... */ }),
+  }),
+});
+```
+
+### ✅ DO: Use Consistent Naming
+
+```typescript
+// ✅ Good - Consistent naming convention
+const postRouter = t.router({
+  get: t.query({ /* ... */ }),      // Single item
+  list: t.query({ /* ... */ }),     // Multiple items
+  create: t.mutation({ /* ... */ }), // Create new
+  update: t.mutation({ /* ... */ }), // Update existing
+  delete: t.mutation({ /* ... */ }), // Delete
+});
+```
+
+### ✅ DO: Nest Routers Logically
+
+```typescript
+// ✅ Good - Deep nesting for related resources
+const api = createAPI({
+  users: t.router({
+    profile: t.router({
+      get: t.query({ /* ... */ }),
+      update: t.mutation({ /* ... */ }),
+    }),
+
+    posts: t.router({
+      list: t.query({ /* ... */ }),
+      create: t.mutation({ /* ... */ }),
+
+      comments: t.router({
+        list: t.query({ /* ... */ }),
+        create: t.mutation({ /* ... */ }),
+      }),
+    }),
+  }),
+
+  posts: t.router({
+    comments: t.router({
+      list: t.query({ /* ... */ }),
+      create: t.mutation({ /* ... */ }),
+    }),
+  }),
+});
+```
+
+### ❌ DON'T: Create Too Many Levels
+
+```typescript
+// ❌ Bad - Too deep!
+const api = createAPI({
+  a: t.router({
+    b: t.router({
+      c: t.router({
+        d: t.router({
+          e: t.query({ /* ... */ }),
+        }),
+      }),
+    }),
+  }),
+});
+
+// ✅ Good - Reasonable depth
+const api = createAPI({
+  users: t.router({
+    posts: t.router({
+      comments: t.router({
+        list: t.query({ /* ... */ }),
+      }),
+    }),
+  }),
+});
+```
+
+### ❌ DON'T: Mix Concerns
+
+```typescript
+// ❌ Bad - Users and posts mixed together
+const mixedRouter = t.router({
+  getUser: t.query({ /* ... */ }),
+  createPost: t.mutation({ /* ... */ }),
+  updateSettings: t.mutation({ /* ... */ }),
+});
+
+// ✅ Good - Separate concerns
+const api = createAPI({
+  users: t.router({
+    settings: t.router({
+      update: t.mutation({ /* ... */ }),
+    }),
+  }),
+
+  posts: t.router({
+    create: t.mutation({ /* ... */ }),
+  }),
+});
+```
+
+---
+
+## What's Next?
+
+Congratulations! You've completed Part 2: Core Concepts.
+
+In **Part 3: Advanced Patterns**, you'll learn:
+- **Chapter 7: Check System** - Authorization and permissions
+- **Chapter 8: Lifecycle Hooks** - Middleware and interceptors
+- **Chapter 9: Error Handling** - Advanced error patterns
+
+Ready to go advanced? Let's continue! 🚀
+
+---
+
+## Chapter Recap
+
+You learned:
+- ✅ What routers are and why they matter
+- ✅ Creating nested router structures
+- ✅ Router composition patterns
+- ✅ Best practices for large APIs
+- ✅ Real-world blog API organization
+
+**Next up:** [Part 3: Advanced Patterns](/learn/part-3-advanced-patterns/chapter-7-checks) →

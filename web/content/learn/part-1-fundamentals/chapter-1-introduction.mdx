@@ -1,0 +1,260 @@
+---
+title: Chapter 1
+description: Discover DeesseJS Functions and why it matters
+---
+
+# Chapter 1: Introduction to DeesseJS Functions
+
+Welcome to the DeesseJS Functions course! In this chapter, you'll discover what makes this framework unique and why developers love building type-safe APIs with it.
+
+## What you'll learn in this chapter
+
+- What is DeesseJS Functions?
+- The problems it solves
+- Core principles and philosophy
+- When to use it (and when not to)
+
+**Estimated reading time:** 10 minutes
+
+---
+
+## What is DeesseJS Functions?
+
+**DeesseJS Functions** is a TypeScript framework for building type-safe APIs with intelligent context management. Think of it as your API's nervous system - connecting data, validation, and business logic in a way that's **type-safe from database to frontend**.
+
+Unlike traditional API frameworks, DeesseJS Functions:
+
+- ✅ **Eliminates runtime type errors** - Catch mistakes before they reach production
+- ✅ **Manages context automatically** - Share data (user, database, config) across all endpoints
+- ✅ **Validates everything** - Built-in Zod integration for request validation
+- ✅ **Stays simple** - No HKTs, no complex type gymnastics, just clean TypeScript
+
+---
+
+## The Problem: Why Do We Need This?
+
+Building APIs today means juggling multiple concerns:
+
+```typescript
+// ❌ The old way: scattered concerns
+async function handler(req: Request) {
+  // 1. Parse and validate (manually)
+  const body = await req.json();
+  if (!body.email || !body.email.includes('@')) {
+    throw new Error('Invalid email');
+  }
+
+  // 2. Get user session (manually)
+  const session = await getSession(req);
+  const user = await db.user.find(session.userId);
+
+  // 3. Check permissions (manually)
+  if (user.role !== 'admin') {
+    throw new Error('Unauthorized');
+  }
+
+  // 4. Handle errors (manually)
+  try {
+    const result = await doSomething(body);
+    return Response.json(result);
+  } catch (error) {
+    return Response.json({ error: error.message }, { status: 500 });
+  }
+}
+```
+
+This gets messy fast. What if you have 50 endpoints? You repeat this logic everywhere.
+
+---
+
+## The Solution: DeesseJS Functions
+
+DeesseJS Functions consolidates all these concerns into a clean, composable system:
+
+```typescript
+// ✅ The DeesseJS way: everything in one place
+const createUser = t.mutation({
+  // 1. Validation (Zod)
+  args: z.object({
+    email: z.string().email(),
+    name: z.string().min(2),
+  }),
+
+  // 2. Context automatically available
+  handler: async (ctx, args) => {
+    // ctx.user is already authenticated
+    // ctx.database is already connected
+    const user = await ctx.database.users.create(args);
+
+    // 3. Automatic error handling
+    return success(user);
+  },
+});
+```
+
+All the complexity is **handled for you**:
+- ✅ Validation runs automatically
+- ✅ Context (user, database, etc.) is available in every handler
+- ✅ Errors are caught and transformed consistently
+- ✅ Everything is type-safe
+
+---
+
+## Core Principles
+
+### 1. **Type Safety First**
+
+Every part of your API is typed - from request arguments to response values. TypeScript catches bugs before runtime:
+
+```typescript
+// TypeScript knows args.email is a string
+const email = args.email.toUpperCase(); // ✅ Valid
+
+// TypeScript knows this doesn't exist
+const invalid = args.fooBar; // ❌ Type error!
+```
+
+### 2. **Context as Single Source of Truth**
+
+Define your context once, use it everywhere:
+
+```typescript
+const { t, createAPI } = defineContext<{
+  userId: string;
+  database: Database;
+  logger: Logger;
+}>({
+  userId: getUserFromSession(),
+  database: myDatabase,
+  logger: myLogger,
+});
+
+// Now every endpoint has access to userId, database, and logger
+```
+
+No more passing dependencies around manually!
+
+### 3. **Functional Programming, Simplified**
+
+DeesseJS Functions uses functional patterns but **without the complexity**:
+
+- ❌ No Higher-Kinded Types (HKTs)
+- ❌ No monad transformers
+- ✅ Simple functions and composition
+- ✅ Standard TypeScript generics
+
+### 4. **Zero Configuration**
+
+Get started in seconds:
+
+```bash
+npm install @deessejs/functions
+```
+
+No code generation, no build steps, no config files. Just import and use.
+
+---
+
+## When to Use DeesseJS Functions
+
+### Perfect for:
+
+- ✅ **Full-stack TypeScript apps** (Next.js, Remix, SvelteKit)
+- ✅ **API-first development** (REST, GraphQL, tRPC)
+- ✅ **Teams that value type safety**
+- ✅ **Projects with complex business logic**
+- ✅ **Applications requiring fine-grained permissions**
+
+### Not ideal for:
+
+- ❌ **Simple CRUD apps** (might be overkill)
+- ❌ **JavaScript-only projects** (requires TypeScript)
+- ❌ **Microservices with no shared context** (each service has its own context)
+
+---
+
+## What Makes It Different?
+
+| Feature | DeesseJS Functions | tRPC | React Query |
+|---------|-------------------|------|-------------|
+| **Context management** | ✅ Built-in | ❌ Manual | ❌ Manual |
+| **Server-side validation** | ✅ Built-in | ✅ Built-in | ❌ Manual |
+| **Type safety** | ✅ End-to-end | ✅ End-to-end | ⚠️ Partial |
+| **Learning curve** | ✅ Gentle | ⚠️ Medium | ⚠️ Medium |
+| **Backend agnostic** | ✅ Yes | ❌ No | ✅ Yes |
+
+---
+
+## A Quick Taste
+
+Here's a complete API in 30 lines:
+
+```typescript
+import { defineContext, success } from '@deessejs/functions';
+import { z } from 'zod';
+
+// 1. Define context once
+const { t, createAPI } = defineContext<{
+  userId: string;
+  database: Database;
+}>({
+  userId: 'user-123',
+  database: myDatabase,
+});
+
+// 2. Define a query
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.find(args.id);
+    return success(user);
+  },
+});
+
+// 3. Define a mutation
+const createUser = t.mutation({
+  args: z.object({
+    name: z.string().min(2),
+    email: z.string().email(),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.create(args);
+    return success(user);
+  },
+});
+
+// 4. Create the API
+const api = createAPI({ getUser, createUser });
+
+// 5. Use it!
+const result = await api.getUser({ id: 1 });
+if (result.ok) {
+  console.log(result.value.name);
+}
+```
+
+Everything is typed, validated, and ready to use.
+
+---
+
+## What's Next?
+
+In **Chapter 2**, you'll:
+- Install and set up DeesseJS Functions
+- Create your first API endpoint
+- Run your first query
+- Understand the project structure
+
+Ready to dive in? Let's go! 🚀
+
+---
+
+## Chapter Recap
+
+You learned:
+- ✅ What DeesseJS Functions is and what problem it solves
+- ✅ The core principles: type safety, context, functional simplicity
+- ✅ When to use it (and when not to)
+- ✅ How it compares to alternatives
+
+**Next up:** [Chapter 2: Installation & Setup](/learn/part-1-fundamentals/chapter-2-installation) →

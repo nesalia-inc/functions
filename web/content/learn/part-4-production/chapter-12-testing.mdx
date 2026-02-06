@@ -1,0 +1,796 @@
+---
+title: Chapter 12
+description: Test your API with confidence
+---
+
+# Chapter 12: Testing - Ensure Quality
+
+Testing ensures your API works as expected. In this final production-ready chapter, you'll learn how to write comprehensive tests for your DeesseJS Functions API.
+
+## What you'll learn in this chapter
+
+- Why testing matters
+- Testing queries and mutations
+- Testing with mock context
+- Integration testing
+- Testing best practices
+
+**Estimated reading time:** 30 minutes
+
+---
+
+## Why Test?
+
+Tests give you confidence that your API works:
+
+```typescript
+// ❌ Without tests - hope it works
+const api = createAPI({ getUser, createUser });
+
+// ✅ With tests - know it works
+test('getUser returns user for valid ID', async () => {
+  const result = await api.getUser({ id: 1 });
+  expect(result.ok).toBe(true);
+  expect(result.value.id).toBe(1);
+});
+```
+
+---
+
+## Test Setup
+
+### Install Testing Dependencies
+
+```bash
+npm install -D vitest @vitest/coverage
+```
+
+### Configure Vitest
+
+Create `vitest.config.ts`:
+
+```typescript
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    globals: true,
+    environment: 'node',
+  },
+});
+```
+
+Add test script to `package.json`:
+
+```json
+{
+  "scripts": {
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage"
+  }
+}
+```
+
+---
+
+## Testing Queries
+
+### Basic Query Test
+
+```typescript
+import { describe, it, expect, beforeEach } from 'vitest';
+import { defineContext, success } from '@deessejs/functions';
+import { z } from 'zod';
+
+describe('getUser query', () => {
+  let api: any;
+  let mockDatabase: any;
+
+  beforeEach(() => {
+    // Setup mock database
+    mockDatabase = {
+      users: {
+        findById: vi.fn().mockResolvedValue({
+          id: 1,
+          name: 'Alice',
+          email: 'alice@example.com',
+        }),
+      },
+    };
+
+    // Create context with mock
+    const { t, createAPI } = defineContext<{
+      userId: string;
+      database: typeof mockDatabase;
+    }>({
+      userId: 'user-123',
+      database: mockDatabase,
+    });
+
+    // Define query
+    const getUser = t.query({
+      args: z.object({ id: z.number() }),
+      handler: async (ctx, args) => {
+        const user = await ctx.database.users.findById(args.id);
+        if (!user) {
+          throw new Error('User not found');
+        }
+        return success(user);
+      },
+    });
+
+    api = createAPI({ getUser });
+  });
+
+  it('returns user when found', async () => {
+    const result = await api.getUser({ id: 1 });
+
+    expect(result.ok).toBe(true);
+    expect(result.value).toEqual({
+      id: 1,
+      name: 'Alice',
+      email: 'alice@example.com',
+    });
+  });
+
+  it('calls database with correct ID', async () => {
+    await api.getUser({ id: 1 });
+
+    expect(mockDatabase.users.findById).toHaveBeenCalledWith(1);
+    expect(mockDatabase.users.findById).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns error when user not found', async () => {
+    mockDatabase.users.findById.mockResolvedValue(null);
+
+    const result = await api.getUser({ id: 999 });
+
+    expect(result.ok).toBe(false);
+    expect(result.error.message).toContain('not found');
+  });
+
+  it('validates input', async () => {
+    // @ts-expect-error - TypeScript should catch this
+    const result = await api.getUser({ id: 'not-a-number' });
+
+    expect(result.ok).toBe(false);
+  });
+});
+```
+
+---
+
+## Testing Mutations
+
+### Mutation Test Example
+
+```typescript
+describe('createUser mutation', () => {
+  let api: any;
+  let mockDatabase: any;
+
+  beforeEach(() => {
+    mockDatabase = {
+      users: {
+        create: vi.fn().mockResolvedValue({
+          id: 1,
+          name: 'Alice',
+          email: 'alice@example.com',
+          createdAt: new Date(),
+        }),
+      },
+    };
+
+    const { t, createAPI } = defineContext<{
+      userId: string;
+      database: typeof mockDatabase;
+    }>({
+      userId: 'user-123',
+      database: mockDatabase,
+    });
+
+    const createUser = t.mutation({
+      args: z.object({
+        name: z.string().min(2),
+        email: z.string().email(),
+      }),
+      handler: async (ctx, args) => {
+        const user = await ctx.database.users.create(args);
+        return success(user);
+      },
+    });
+
+    api = createAPI({ createUser });
+  });
+
+  it('creates user with valid data', async () => {
+    const result = await api.createUser({
+      name: 'Bob',
+      email: 'bob@example.com',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.value.id).toBe(1);
+    expect(result.value.name).toBe('Bob');
+    expect(result.value.email).toBe('bob@example.com');
+  });
+
+  it('calls database.create with correct data', async () => {
+    await api.createUser({
+      name: 'Charlie',
+      email: 'charlie@example.com',
+    });
+
+    expect(mockDatabase.users.create).toHaveBeenCalledWith({
+      name: 'Charlie',
+      email: 'charlie@example.com',
+    });
+  });
+
+  it('validates name length', async () => {
+    const result = await api.createUser({
+      name: 'A', // ❌ Too short
+      email: 'alice@example.com',
+    });
+
+    expect(result.ok).toBe(false);
+  });
+
+  it('validates email format', async () => {
+    const result = await api.createUser({
+      name: 'Alice',
+      email: 'invalid-email', // ❌ Invalid email
+    });
+
+    expect(result.ok).toBe(false);
+  });
+});
+```
+
+---
+
+## Testing with Lifecycle Hooks
+
+### Testing Hook Behavior
+
+```typescript
+describe('updatePost with hooks', () => {
+  let api: any;
+  let mockLogger: any;
+  let mockCache: any;
+
+  beforeEach(() => {
+    mockLogger = {
+      info: vi.fn(),
+      error: vi.fn(),
+    };
+
+    mockCache = {
+      delete: vi.fn().mockResolvedValue(true),
+    };
+
+    const { t, createAPI } = defineContext<{
+      userId: string;
+      logger: typeof mockLogger;
+      cache: typeof mockCache;
+    }>({
+      userId: 'user-123',
+      logger: mockLogger,
+      cache: mockCache,
+    });
+
+    const updatePost = t.mutation({
+      args: z.object({
+        id: z.number(),
+        title: z.string().optional(),
+      }),
+      handler: async (ctx, args) => {
+        return success({ id: args.id, title: 'Updated' });
+      },
+    })
+      .beforeInvoke(async (ctx, args) => {
+        ctx.logger.info('Updating post', { id: args.id });
+      })
+      .onSuccess(async (ctx, args, data) => {
+        ctx.logger.info('Post updated', { id: data.id });
+        await ctx.cache.delete(`post:${data.id}`);
+      });
+
+    api = createAPI({ updatePost });
+  });
+
+  it('logs before invoking', async () => {
+    await api.updatePost({ id: 1, title: 'New Title' });
+
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      'Updating post',
+      { id: 1 }
+    );
+  });
+
+  it('logs on success', async () => {
+    await api.updatePost({ id: 1, title: 'New Title' });
+
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      'Post updated',
+      { id: 1 }
+    );
+  });
+
+  it('invalidates cache on success', async () => {
+    await api.updatePost({ id: 1, title: 'New Title' });
+
+    expect(mockCache.delete).toHaveBeenCalledWith('post:1');
+  });
+});
+```
+
+---
+
+## Testing Error Handling
+
+### Testing Outcome Types
+
+```typescript
+import { successOutcome, failureOutcome, Causes } from '@deessejs/functions';
+
+describe('getUser with outcome types', () => {
+  let api: any;
+  let mockDatabase: any;
+
+  beforeEach(() => {
+    mockDatabase = {
+      users: {
+        findById: vi.fn(),
+      },
+    };
+
+    const { t, createAPI } = defineContext<{
+      userId: string;
+      database: typeof mockDatabase;
+    }>({
+      userId: 'user-123',
+      database: mockDatabase,
+    });
+
+    const getUser = t.query({
+      args: z.object({ id: z.number() }),
+      handler: async (ctx, args) => {
+        const user = await ctx.database.users.findById(args.id);
+
+        if (!user) {
+          return failureOutcome(
+            Causes.notFound(args.id, 'User')
+          );
+        }
+
+        return successOutcome(user);
+      },
+    });
+
+    api = createAPI({ getUser });
+  });
+
+  it('returns success outcome when user found', async () => {
+    mockDatabase.users.findById.mockResolvedValue({
+      id: 1,
+      name: 'Alice',
+    });
+
+    const result = await api.getUser({ id: 1 });
+
+    expect(result.ok).toBe(true);
+    expect(result.value.id).toBe(1);
+  });
+
+  it('returns failure outcome when user not found', async () => {
+    mockDatabase.users.findById.mockResolvedValue(null);
+
+    const result = await api.getUser({ id: 999 });
+
+    expect(result.ok).toBe(false);
+    expect(result.error.name).toBe('NotFound');
+  });
+
+  it('failure outcome has structured error', async () => {
+    mockDatabase.users.findById.mockResolvedValue(null);
+
+    const result = await api.getUser({ id: 999 });
+
+    expect(result.ok).toBe(false);
+    expect(result.error.cause).toEqual({
+      type: 'not_found',
+      resourceId: 999,
+      resourceType: 'User',
+    });
+  });
+});
+```
+
+---
+
+## Testing Checks
+
+### Testing Authorization
+
+```typescript
+import { check } from '@deessejs/functions';
+
+describe('deleteUser with authorization', () => {
+  let api: any;
+
+  beforeEach(() => {
+    const { t, createAPI } = defineContext<{
+      userId: string;
+      userRole: 'admin' | 'user';
+      database: any;
+    }>({
+      userId: 'user-123',
+      userRole: 'admin',
+      database: {
+        users: {
+          delete: vi.fn().mockResolvedValue(true),
+        },
+      },
+    });
+
+    const isAdmin = check({
+      args: z.object({}),
+      handler: async (ctx) =>
+        ctx.userRole === 'admin' ? success() : failure()
+      ,
+    });
+
+    const deleteUser = t.mutation({
+      args: z.object({ id: z.number() }),
+      handler: async (ctx, args) => {
+        return success(await ctx.database.users.delete(args.id));
+      },
+    }).withCheck(isAdmin);
+
+    api = createAPI({ deleteUser });
+  });
+
+  it('allows deletion when user is admin', async () => {
+    const result = await api.deleteUser({ id: 1 });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects deletion when user is not admin', async () => {
+    // Change user role
+    const { t, createAPI } = defineContext<{
+      userId: string;
+      userRole: 'user';
+      database: any;
+    }>({
+      userId: 'user-456',
+      userRole: 'user',
+      database: {},
+    });
+
+    const isAdmin = check({
+      args: z.object({}),
+      handler: async (ctx) =>
+        ctx.userRole === 'admin' ? success() : failure()
+      ,
+    });
+
+    const deleteUser = t.mutation({
+      args: z.object({ id: z.number() }),
+      handler: async (ctx, args) => {
+        return success(await ctx.database.users.delete(args.id));
+      },
+    }).withCheck(isAdmin);
+
+    const api = createAPI({ deleteUser });
+
+    const result = await api.deleteUser({ id: 1 });
+
+    expect(result.ok).toBe(false);
+  });
+});
+```
+
+---
+
+## Integration Testing
+
+### Full Flow Testing
+
+```typescript
+describe('user registration flow', () => {
+  let api: any;
+  let mockDatabase: any;
+  let mockEmail: any;
+
+  beforeEach(() => {
+    mockDatabase = {
+      users: {
+        findByEmail: vi.fn().mockResolvedValue(null),
+        create: vi.fn(),
+      },
+    };
+
+    mockEmail = {
+      send: vi.fn().mockResolvedValue(true),
+    };
+
+    const { t, createAPI } = defineContext<{
+      userId: string;
+      database: typeof mockDatabase;
+      email: typeof mockEmail;
+    }>({
+      userId: 'user-123',
+      database: mockDatabase,
+      email: mockEmail,
+    });
+
+    const registerUser = t.mutation({
+      args: z.object({
+        name: z.string().min(2),
+        email: z.string().email(),
+        password: z.string().min(8),
+      }),
+      handler: async (ctx, args) => {
+        const existing = await ctx.database.users.findByEmail(args.email);
+        if (existing) {
+          return failureOutcome(
+            cause({ name: 'DuplicateEmail', message: 'Email exists' })
+          );
+        }
+
+        const user = await ctx.database.users.create({
+          name: args.name,
+          email: args.email,
+          passwordHash: await hash(args.password),
+        });
+
+        await ctx.email.send({
+          to: user.email,
+          subject: 'Welcome!',
+        });
+
+        return successOutcome(user);
+      },
+    });
+
+    api = createAPI({ registerUser });
+  });
+
+  it('registers new user successfully', async () => {
+    const result = await api.registerUser({
+      name: 'Alice',
+      email: 'alice@example.com',
+      password: 'password123',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.value.email).toBe('alice@example.com');
+  });
+
+  it('sends welcome email', async () => {
+    await api.registerUser({
+      name: 'Bob',
+      email: 'bob@example.com',
+      password: 'password123',
+    });
+
+    expect(mockEmail.send).toHaveBeenCalledWith({
+      to: 'bob@example.com',
+      subject: 'Welcome!',
+    });
+  });
+
+  it('rejects duplicate email', async () => {
+    mockDatabase.users.findByEmail.mockResolvedValue({
+      id: 1,
+      email: 'bob@example.com',
+    });
+
+    const result = await api.registerUser({
+      name: 'Bob',
+      email: 'bob@example.com',
+      password: 'password123',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error.name).toBe('DuplicateEmail');
+  });
+});
+```
+
+---
+
+## Testing with Mock Context
+
+### Creating Test Utilities
+
+```typescript
+// test/utils.ts
+import { defineContext } from '@deessejs/functions';
+
+export function createTestContext(overrides = {}) {
+  return defineContext<{
+    userId: string;
+    database: any;
+    logger: any;
+    cache: any;
+  }>({
+    userId: 'test-user-123',
+    database: {
+      users: {
+        findById: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        delete: vi.fn(),
+      },
+      posts: {
+        findById: vi.fn(),
+        findAll: vi.fn(),
+        create: vi.fn(),
+      },
+    },
+    logger: {
+      info: vi.fn(),
+      error: vi.fn(),
+      warn: vi.fn(),
+    },
+    cache: {
+      get: vi.fn(),
+      set: vi.fn(),
+      delete: vi.fn(),
+      deleteByTag: vi.fn(),
+    },
+    ...overrides,
+  });
+}
+
+export function createMockUser(overrides = {}) {
+  return {
+    id: 1,
+    name: 'Test User',
+    email: 'test@example.com',
+    createdAt: new Date(),
+    ...overrides,
+  };
+}
+```
+
+### Using Test Utilities
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { createTestContext, createMockUser } from './test/utils';
+
+describe('getUser with test utilities', () => {
+  it('fetches and returns user', async () => {
+    // Setup
+    const mockUser = createMockUser({ id: 123 });
+    const { t, createAPI } = createTestContext({
+      database: {
+        users: {
+          findById: vi.fn().mockResolvedValue(mockUser),
+        },
+      },
+    });
+
+    const getUser = t.query({
+      args: z.object({ id: z.number() }),
+      handler: async (ctx, args) => {
+        const user = await ctx.database.users.findById(args.id);
+        return success(user);
+      },
+    });
+
+    const api = createAPI({ getUser });
+
+    // Test
+    const result = await api.getUser({ id: 123 });
+
+    expect(result.ok).toBe(true);
+    expect(result.value.id).toBe(123);
+  });
+});
+```
+
+---
+
+## Testing Best Practices
+
+### ✅ DO: Test Happy Path and Edge Cases
+
+```typescript
+describe('createUser', () => {
+  it('creates user with valid data', async () => {
+    // ✅ Happy path
+  });
+
+  it('rejects short names', async () => {
+    // ✅ Edge case: name too short
+  });
+
+  it('rejects invalid email', async () => {
+    // ✅ Edge case: invalid email format
+  });
+
+  it('handles database errors gracefully', async () => {
+    // ✅ Error case: database down
+  });
+});
+```
+
+### ✅ DO: Test Each Hook Separately
+
+```typescript
+describe('updateUser hooks', () => {
+  describe('beforeInvoke', () => {
+    it('logs the update attempt', async () => {
+      // Test beforeInvoke logic
+    });
+  });
+
+  describe('onSuccess', () => {
+    it('invalidates relevant caches', async () => {
+      // Test onSuccess logic
+    });
+  });
+
+  describe('onError', () => {
+    it('logs errors appropriately', async () => {
+      // Test onError logic
+    });
+  });
+});
+```
+
+### ❌ DON'T: Test Implementation Details
+
+```typescript
+// ❌ Bad - Testing internals
+describe('internal function', () => {
+  it('adds 2 + 2', () => {
+    expect(add(2, 2)).toBe(4);
+  });
+});
+
+// ✅ Good - Testing behavior
+describe('createUser', () => {
+  it('creates user in database', async () => {
+    const result = await api.createUser({
+      name: 'Alice',
+      email: 'alice@example.com',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mockDatabase.users.create).toHaveBeenCalled();
+  });
+});
+```
+
+---
+
+## What's Next?
+
+Congratulations! You've completed **Part 4: Production Ready**!
+
+In **Part 5: Architecture**, the final part, you'll learn:
+- **Chapter 13:** Functional programming principles
+- **Chapter 14:** Migration from other frameworks
+
+Ready for the final chapters? Let's finish strong! 🚀
+
+---
+
+## Chapter Recap
+
+You learned:
+- ✅ Setting up Vitest for testing
+- Testing queries and mutations
+- Testing lifecycle hooks
+- Testing with mock context
+- Integration testing patterns
+- Testing best practices
+
+**Next up:** [Part 5: Architecture](/learn/part-5-architecture/chapter-13-functional-programming) →

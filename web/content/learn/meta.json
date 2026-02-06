@@ -1,0 +1,27 @@
+{
+    "title": "Learn DeesseJS Functions",
+    "description": "A comprehensive course from beginner to expert",
+    "icon": "GraduationCap",
+    "root": false,
+    "pages": [
+        "---Part 1: Fundamentals---",
+        "part-1-fundamentals/chapter-1-introduction",
+        "part-1-fundamentals/chapter-2-installation",
+        "part-1-fundamentals/chapter-3-context",
+        "---Part 2: Core Concepts---",
+        "part-2-core-concepts/chapter-4-queries",
+        "part-2-core-concepts/chapter-5-mutations",
+        "part-2-core-concepts/chapter-6-routers",
+        "---Part 3: Advanced Patterns---",
+        "part-3-advanced-patterns/chapter-7-checks",
+        "part-3-advanced-patterns/chapter-8-lifecycle-hooks",
+        "part-3-advanced-patterns/chapter-9-error-handling",
+        "---Part 4: Production Ready---",
+        "part-4-production/chapter-10-caching",
+        "part-4-production/chapter-11-retry",
+        "part-4-production/chapter-12-testing",
+        "---Part 5: Architecture---",
+        "part-5-architecture/chapter-13-functional-programming",
+        "part-5-architecture/chapter-14-migration"
+    ]
+}

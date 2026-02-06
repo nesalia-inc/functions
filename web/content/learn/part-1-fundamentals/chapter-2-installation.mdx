@@ -1,0 +1,459 @@
+---
+title: Chapter 2
+description: Install and set up your first DeesseJS Functions project
+---
+
+# Chapter 2: Installation & Your First API
+
+In this chapter, you'll get DeesseJS Functions running on your machine and create your first type-safe API endpoint. Let's dive in!
+
+## What you'll learn in this chapter
+
+- Installing DeesseJS Functions
+- Setting up your project
+- Creating your first query
+- Testing your API
+- Understanding the project structure
+
+**Estimated reading time:** 15 minutes
+**Prerequisites:**
+- Node.js 16+ installed
+- Basic TypeScript knowledge
+- A code editor (VS Code recommended)
+
+---
+
+## Installation
+
+### Step 1: Create a New Project
+
+If you don't have a project yet, create one:
+
+```bash
+mkdir my-api
+cd my-api
+npm init -y
+```
+
+### Step 2: Install Dependencies
+
+```bash
+# Install DeesseJS Functions
+npm install @deessejs/functions
+
+# Install TypeScript (if not already installed)
+npm install -D typescript @types/node
+
+# Install Zod (for validation)
+npm install zod
+```
+
+> **Good to know:** Zod is required for input validation. It integrates seamlessly with TypeScript to provide runtime type safety.
+
+### Step 3: Initialize TypeScript
+
+Create a `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}
+```
+
+---
+
+## Your First API
+
+### Step 1: Create the Project Structure
+
+```bash
+mkdir src
+```
+
+### Step 2: Define Your Context
+
+Create `src/context.ts`:
+
+```typescript
+import { defineContext } from '@deessejs/functions';
+
+// Define what data your API needs access to
+interface Context {
+  userId: string;
+  database: {
+    users: {
+      findById: (id: number) => Promise<{ id: number; name: string } | null>;
+      create: (data: { name: string; email: string }) => Promise<{ id: number; name: string; email: string }>;
+    };
+  };
+}
+
+// Create the context builder
+export const { t, createAPI } = defineContext<Context>({
+  userId: 'user-123', // In real app, get from session
+  database: {
+    users: {
+      findById: async (id) => {
+        // Mock database call
+        return { id, name: 'Alice' };
+      },
+      create: async (data) => {
+        // Mock database call
+        return { id: 1, ...data };
+      },
+    },
+  },
+});
+```
+
+> **Good to know:** Context is defined once and shared across all your endpoints. In a real application, you'd fetch the userId from a session or JWT token.
+
+### Step 3: Create Your First Query
+
+Create `src/queries.ts`:
+
+```typescript
+import { t } from './context';
+import { z } from 'zod';
+import { success } from '@deessejs/functions';
+
+// A query to fetch a user by ID
+export const getUser = t.query({
+  args: z.object({
+    id: z.number(),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.findById(args.id);
+
+    if (!user) {
+      throw new Error(`User ${args.id} not found`);
+    }
+
+    return success(user);
+  },
+});
+```
+
+### Step 4: Create Your First Mutation
+
+Create `src/mutations.ts`:
+
+```typescript
+import { t } from './context';
+import { z } from 'zod';
+import { success } from '@deessejs/functions';
+
+// A mutation to create a new user
+export const createUser = t.mutation({
+  args: z.object({
+    name: z.string().min(2, 'Name must be at least 2 characters'),
+    email: z.string().email('Invalid email address'),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.create(args);
+    return success(user);
+  },
+});
+```
+
+> **Good to know:** Queries are for **reading** data, mutations are for **writing** data. This distinction helps with caching and optimization.
+
+### Step 5: Build the API
+
+Create `src/api.ts`:
+
+```typescript
+import { createAPI } from './context';
+import { getUser } from './queries';
+import { createUser } from './mutations';
+
+// Combine all endpoints into one API
+export const api = createAPI({
+  getUser,
+  createUser,
+});
+```
+
+### Step 6: Use Your API
+
+Create `src/index.ts`:
+
+```typescript
+import { api } from './api';
+
+async function main() {
+  // Test the query
+  const userResult = await api.getUser({ id: 1 });
+
+  if (userResult.ok) {
+    console.log('✅ User found:', userResult.value);
+  } else {
+    console.error('❌ Error:', userResult.error);
+  }
+
+  // Test the mutation
+  const createResult = await api.createUser({
+    name: 'Bob',
+    email: 'bob@example.com',
+  });
+
+  if (createResult.ok) {
+    console.log('✅ User created:', createResult.value);
+  } else {
+    console.error('❌ Error:', createResult.error);
+  }
+}
+
+main();
+```
+
+---
+
+## Run Your First API
+
+### Step 1: Compile TypeScript
+
+```bash
+npx tsc
+```
+
+This compiles your TypeScript to JavaScript in the `dist/` folder.
+
+### Step 2: Run Your Code
+
+```bash
+node dist/index.js
+```
+
+You should see:
+
+```
+✅ User found: { id: 1, name: 'Alice' }
+✅ User created: { id: 1, name: 'Bob', email: 'bob@example.com' }
+```
+
+---
+
+## Understanding the Structure
+
+Let's break down what you just built:
+
+### 1. Context (`context.ts`)
+
+The **context** is the heart of your API. It contains:
+- **Data** that all endpoints need (userId, database, logger, etc.)
+- **Configuration** that shouldn't change per-request
+- **Shared services** (database connection, API clients, etc.)
+
+```typescript
+const { t, createAPI } = defineContext<Context>({
+  // Context data goes here
+});
+```
+
+- `t` - The API builder for creating queries and mutations
+- `createAPI` - Combines your endpoints into a single API object
+
+### 2. Queries (`queries.ts`)
+
+**Queries** are for **reading** data:
+
+```typescript
+const getUser = t.query({
+  args: z.object({ id: z.number() }),  // ✅ Input validation
+  handler: async (ctx, args) => {        // ✅ Type-safe handler
+    // ctx = context (userId, database, etc.)
+    // args = validated input { id: number }
+    return success(data);                // ✅ Success result
+  },
+});
+```
+
+### 3. Mutations (`mutations.ts`)
+
+**Mutations** are for **writing** data:
+
+```typescript
+const createUser = t.mutation({
+  args: z.object({
+    name: z.string().min(2),
+    email: z.string().email(),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.create(args);
+    return success(user);
+  },
+});
+```
+
+### 4. API (`api.ts`)
+
+The **API** combines everything:
+
+```typescript
+export const api = createAPI({
+  getUser,
+  createUser,
+});
+```
+
+Now you can call:
+- `api.getUser({ id: 1 })` - Fully typed!
+- `api.createUser({ name: '...', email: '...' })` - Fully typed!
+
+---
+
+## Type Safety in Action
+
+One of the best parts of DeesseJS Functions is the type safety. Try this:
+
+```typescript
+// ✅ Valid - TypeScript knows this works
+api.getUser({ id: 1 });
+
+// ❌ Error - TypeScript catches this at compile time!
+api.getUser({ id: 'not-a-number' });
+
+// ❌ Error - Missing required field
+api.getUser({});
+
+// ❌ Error - Unknown field
+api.getUser({ id: 1, unknownField: 'oops' });
+```
+
+**TypeScript protects you from mistakes before you even run the code!**
+
+---
+
+## Project Structure Best Practices
+
+As your API grows, organize it like this:
+
+```
+src/
+├── context/          # Context definition
+│   └── index.ts
+├── queries/          # All queries
+│   ├── users.ts
+│   ├── posts.ts
+│   └── index.ts
+├── mutations/        # All mutations
+│   ├── users.ts
+│   ├── posts.ts
+│   └── index.ts
+├── api/              # API composition
+│   └── index.ts
+├── types/            # Shared types
+│   └── index.ts
+└── index.ts          # Entry point
+```
+
+---
+
+## Common Mistakes to Avoid
+
+### ❌ Mistake 1: Forgetting to Return Success
+
+```typescript
+// ❌ Wrong - no return
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    const user = await db.findById(args.id);
+    user; // Forgot to return!
+  },
+});
+
+// ✅ Correct - return success
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    const user = await db.findById(args.id);
+    return success(user); // Always return success()
+  },
+});
+```
+
+### ❌ Mistake 2: Not Using Validation
+
+```typescript
+// ❌ Wrong - no validation
+const createUser = t.mutation({
+  args: z.object({}), // Empty validation!
+  handler: async (ctx, args) => {
+    // args could be anything!
+  },
+});
+
+// ✅ Correct - validate everything
+const createUser = t.mutation({
+  args: z.object({
+    name: z.string().min(2),
+    email: z.string().email(),
+  }),
+  handler: async (ctx, args) => {
+    // args is guaranteed to be valid
+  },
+});
+```
+
+### ❌ Mistake 3: Ignoring Context
+
+```typescript
+// ❌ Wrong - creating database connection in each handler
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    const db = new Database(); // ❌ Inefficient!
+    return success(await db.findById(args.id));
+  },
+});
+
+// ✅ Correct - use context
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    // ctx.database is already connected
+    return success(await ctx.database.findById(args.id));
+  },
+});
+```
+
+---
+
+## What's Next?
+
+Congratulations! 🎉 You've created your first type-safe API with DeesseJS Functions.
+
+In **Chapter 3**, you'll learn:
+- How context really works under the hood
+- Advanced context patterns
+- Sharing context across modules
+- Context best practices
+
+Ready to master context? Let's go! 🚀
+
+---
+
+## Chapter Recap
+
+You learned:
+- ✅ How to install and set up DeesseJS Functions
+- ✅ How to create queries and mutations
+- ✅ How to build and use your API
+- ✅ The project structure and best practices
+- ✅ Common mistakes to avoid
+
+**Next up:** [Chapter 3: Understanding Context](/learn/part-1-fundamentals/chapter-3-context) →
