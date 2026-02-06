@@ -212,7 +212,7 @@ export default function HomePage() {
                                 <span className="token plain"> </span>
                                 <span className="token punctuation">{'{'}</span>
                                 <span className="token plain"> defineContext</span>
-                                <span className="token punctuation">}</span>
+                                <span className="token punctuation">{'}'}</span>
                                 <span className="token plain"> </span>
                                 <span className="token keyword module">from</span>
                                 <span className="token plain"> </span>
@@ -255,7 +255,7 @@ export default function HomePage() {
                               <div className="token-line">
                                 <span className="token plain"></span>
                                 <span className="token punctuation">{'}'}</span>
-                                <span className="token operator">></span>
+                                <span className="token operator">{'>'}</span>
                                 <span className="token punctuation">({'{'}</span>
                               </div>
                               <div className="token-line">
