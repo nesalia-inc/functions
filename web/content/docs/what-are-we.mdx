@@ -4,9 +4,6 @@ description: Understand what DeesseJS Functions is and why it exists
 icon: HelpCircleIcon
 ---
 
-import { Callout } from "fumadocs-ui/components/callout";
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-
 # What are DeesseJS Functions?
 
 **DeesseJS Functions** is a TypeScript library for building type-safe APIs with a focus on simplicity, context management, and developer experience.
@@ -17,13 +14,13 @@ Building type-safe APIs today often means choosing between:
 
 - **Complex type-level programming** - HKTs, complex generics, "Type instantiation is excessively deep" errors
 - **Runtime uncertainty** - Any types, loose validation, runtime errors that should have been caught at compile time
-- ** scattered business logic** - Context passed around manually, middleware hell, duplicated code
+- **Scattered business logic** - Context passed around manually, middleware hell, duplicated code
 
 ## The Solution
 
 DeesseJS Functions takes a different approach:
 
-### 1. **Simple Types, Full Safety**
+### 1. Simple Types, Full Safety
 
 No complex type machinery. Standard TypeScript generics that just work:
 
@@ -43,7 +40,7 @@ if (result.ok) {
 }
 ```
 
-### 2. **Single Source of Truth**
+### 2. Single Source of Truth
 
 Define context once, use it everywhere:
 
@@ -68,7 +65,7 @@ const createUser = t.mutation({
 });
 ```
 
-### 3. **Explicit Error Handling**
+### 3. Explicit Error Handling
 
 No more uncaught exceptions. Every operation returns a result:
 
@@ -82,11 +79,6 @@ if (!result.ok) {
 
 return { user: result.value };
 ```
-
-<Callout type="info" title="Outcome Types">
-DeesseJS Functions uses outcome types instead of exceptions for error handling.
-This forces you to handle errors explicitly and makes your code more predictable.
-</Callout>
 
 ## Core Principles
 
@@ -121,12 +113,6 @@ DeesseJS Functions is **not**:
 - ❌ An ORM (works with any database)
 - ❌ A framework (it's a library you can adopt gradually)
 
-<Callout type="warning" title="What about HTTP?">
-DeesseJS Functions doesn't handle HTTP directly. Instead, it provides a type-safe
-layer that you can integrate with any HTTP framework (Express, Next.js, Fastify, etc.).
-This keeps the library focused and composable.
-</Callout>
-
 ## When to Use DeesseJS Functions
 
 ### Perfect For ✅
@@ -144,38 +130,3 @@ This keeps the library focused and composable.
 - **JavaScript projects** - Requires TypeScript for type safety
 - **Public APIs** - Designed for internal use first
 - **REST purists** - Different philosophy than REST
-
-## The Architecture
-
-```
-┌─────────────────────────────────────────────────────┐
-│                    Your Application                 │
-│  (Next.js, Express, React, Vue, Vanilla, etc.)     │
-└─────────────────────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────┐
-│              DeesseJS Functions API                 │
-│  • Type-safe queries & mutations                    │
-│  • Context management                               │
-│  • Error handling                                   │
-│  • Validation (Zod)                                 │
-└─────────────────────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────┐
-│                  Data Layer                         │
-│  • Database (PostgreSQL, MongoDB, etc.)             │
-│  • External APIs                                    │
-│  • File system                                      │
-│  • Cache                                            │
-└─────────────────────────────────────────────────────┘
-```
-
-## What's Next?
-
-Ready to dive deeper? Check out:
-
-- **[Quick Start](/docs/quick-start)** - Get started in 5 minutes
-- **[Comparisons](/docs/comparisons)** - See how we compare to alternatives
-- **[Context](/docs/context)** - Learn about context management

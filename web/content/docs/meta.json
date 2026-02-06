@@ -5,26 +5,6 @@
     "root": true,
     "pages": [
         "---Getting Started---",
-        "quick-start",
-        "what-are-we",
-        "---Core Concepts---",
-        "context",
-        "queries-mutations",
-        "router",
-        "---Advanced---",
-        "lifecycle-hooks",
-        "error-handling",
-        "retry",
-        "cache-stream",
-        "command-aliases",
-        "standalone-operations",
-        "---Reference---",
-        "migration",
-        "---Types---",
-        "(types)/index",
-        "(types)/result",
-        "(types)/async-result",
-        "(types)/maybe",
-        "(types)/unit"
+        "quick-start"
     ]
 }
