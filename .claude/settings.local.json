@@ -13,7 +13,11 @@
       "Bash(pnpm exec vitest run:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push)"
+      "Bash(git push)",
+      "WebSearch",
+      "Bash(npm run build:*)",
+      "Bash(git mv:*)",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []
