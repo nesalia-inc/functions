@@ -4,6 +4,8 @@
     "icon": "Pencil",
     "root": true,
     "pages": [
+        "---Learn---",
+        "learn",
         "---Getting Started---",
         "index",
         "getting-started",
