@@ -5,6 +5,13 @@
     "root": true,
     "pages": [
         "---Getting Started---",
-        "quick-start"
+        "what-are-we",
+        "monads",
+        "---Types---",
+        "(types)/index",
+        "(types)/result",
+        "(types)/async-result",
+        "(types)/maybe",
+        "(types)/unit"
     ]
 }

@@ -1,0 +1,851 @@
+---
+title: Understanding Monads
+description: Deep dive into monads and functional programming patterns
+---
+
+# Understanding Monads
+
+Monads are a design pattern from functional programming that helps manage side effects, errors, and optional values in a type-safe way. In DeesseJS Functions, monads are the foundation of robust error handling and data transformation.
+
+## What is a Monad?
+
+A monad is a design pattern that wraps a value and provides two operations:
+
+1. **Return/Unit** (also called `pure` or `of`): Wrap a value in the monad
+2. **Bind/FlatMap** (also called `chain`): Transform the wrapped value using a function that returns a new monad
+
+### Why Monads Matter
+
+Monads allow you to:
+
+- **Handle errors explicitly** - No surprise exceptions
+- **Chain operations** - Compose multiple operations safely
+- **Manage side effects** - Track when operations fail
+- **Maintain type safety** - Compiler tracks what can go wrong
+
+### The Monad Interface
+
+```ts
+interface Monad<T> {
+  // Wrap a value
+  pure<U>(value: U): Monad<U>;
+
+  // Transform using a function that returns a Monad
+  chain<U>(fn: (value: T) => Monad<U>): Monad<U>;
+}
+```
+
+## Monad Types in DeesseJS Functions
+
+### 1. Result<T, E>
+
+The `Result` type represents operations that can succeed or fail with a specific error type.
+
+#### Type Definition
+
+```ts
+type Result<T, E> =
+  | { ok: true; value: T }
+  | { ok: false; error: E };
+```
+
+#### Implementation Details
+
+Under the hood, `Result` is implemented with helper functions:
+
+```ts
+// From @deessejs/functions
+function success<T>(value: T): Result<T, never> {
+  return { ok: true, value };
+}
+
+function failure<E>(error: E): Result<never, E> {
+  return { ok: false, error };
+}
+
+// Type guard for checking success
+function isOk<T, E>(result: Result<T, E>): result is { ok: true; value: T } {
+  return result.ok;
+}
+
+// Type guard for checking failure
+function isErr<T, E>(result: Result<T, E>): result is { ok: false; error: E } {
+  return !result.ok;
+}
+```
+
+#### Using Result
+
+```ts
+import { success, failure } from "@deessejs/functions";
+
+// Database operation that can fail
+function getUser(id: number): Result<User, DatabaseError> {
+  const user = database.users.findById(id);
+
+  if (!user) {
+    return failure({
+      code: "NOT_FOUND",
+      message: `User ${id} not found`,
+      context: { id }
+    });
+  }
+
+  return success(user);
+}
+
+// Usage
+const result = getUser(123);
+
+if (result.ok) {
+  console.log(result.value.name); // TypeScript knows this is safe
+} else {
+  console.error(result.error.message); // Handle error
+}
+```
+
+#### Combining Results with chain
+
+```ts
+// chain allows you to sequence operations that return Results
+const result = await api.getUser({ id: 1 })
+  .chain(async (user) => {
+    return await api.getPosts({ userId: user.id });
+  })
+  .chain(async (posts) => {
+    return await api.getComments({ postIds: posts.map(p => p.id) });
+  });
+
+// If any step fails, the whole chain fails
+if (result.ok) {
+  console.log(result.value); // Comments
+} else {
+  console.error(result.error); // Error from first failing step
+}
+```
+
+### 2. AsyncResult<T, E>
+
+`AsyncResult` is simply `Promise<Result<T, E>>` - an async version of Result.
+
+#### Type Definition
+
+```ts
+type AsyncResult<T, E> = Promise<Result<T, E>>;
+```
+
+#### Implementation Details
+
+```ts
+// Helper for creating async results
+async function asyncSuccess<T>(value: T): AsyncResult<T, never> {
+  return success(value);
+}
+
+async function asyncFailure<E>(error: E): AsyncResult<never, E> {
+  return failure(error);
+}
+
+// Convert a Promise that might throw to AsyncResult
+async function fromPromise<T>(
+  fn: () => Promise<T>
+): AsyncResult<T, Exception> {
+  try {
+    const value = await fn();
+    return success(value);
+  } catch (error) {
+    return failure(exception({
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    }));
+  }
+}
+```
+
+#### Using AsyncResult
+
+```ts
+import { success, failure, exception } from "@deessejs/functions";
+
+// Async operation with error handling
+async function fetchUser(id: number): AsyncResult<User, NetworkError> {
+  try {
+    const response = await fetch(`/api/users/${id}`);
+
+    if (!response.ok) {
+      return failure({
+        code: "NETWORK_ERROR",
+        message: `HTTP ${response.status}: ${response.statusText}`,
+        status: response.status
+      });
+    }
+
+    const data = await response.json();
+    return success(data);
+  } catch (error) {
+    return failure({
+      code: "FETCH_ERROR",
+      message: error.message,
+      originalError: error
+    });
+  }
+}
+
+// Usage
+const result = await fetchUser(123);
+
+if (result.ok) {
+  console.log("User:", result.value);
+} else {
+  console.error("Failed:", result.error.message);
+}
+```
+
+### 3. Maybe<T>
+
+The `Maybe` monad represents optional values - a value that might exist or not.
+
+#### Type Definition
+
+```ts
+type Maybe<T> = Some<T> | None;
+
+interface Some<T> {
+  _tag: "Some";
+  value: T;
+}
+
+interface None {
+  _tag: "None";
+}
+```
+
+#### Implementation Details
+
+```ts
+// Create a Some value
+function some<T>(value: T): Maybe<T> {
+  return { _tag: "Some", value };
+}
+
+// Create a None value
+const none: Maybe<never> = { _tag: "None" };
+
+// Convert nullable to Maybe
+function fromNullable<T>(value: T | null | undefined): Maybe<T> {
+  return value === null || value === undefined
+    ? none
+    : some(value);
+}
+
+// Type guards
+function isSome<T>(maybe: Maybe<T>): maybe is Some<T> {
+  return maybe._tag === "Some";
+}
+
+function isNone<T>(maybe: Maybe<T>): maybe is None {
+  return maybe._tag === "None";
+}
+```
+
+#### Using Maybe
+
+```ts
+import { some, none, fromNullable } from "@deessejs/functions";
+
+// Safe optional value access
+function findUserPhoto(user: User): Maybe<Photo> {
+  return fromNullable(user.photo);
+}
+
+// Usage
+const photo = findUserPhoto(user);
+
+if (photo._tag === "Some") {
+  console.log("Photo URL:", photo.value.url);
+} else {
+  console.log("No photo found");
+}
+```
+
+#### Maybe vs Result
+
+When to use which?
+
+```ts
+// ✅ Use Result when you need to know WHY it failed
+function getUser(id: number): Result<User, NotFoundError> {
+  const user = db.users.find(id);
+  if (!user) {
+    return failure({
+      code: "NOT_FOUND",
+      id,
+      timestamp: Date.now()
+    });
+  }
+  return success(user);
+}
+
+// ✅ Use Maybe when you only care IF it exists
+function getUserPhoto(user: User): Maybe<Photo> {
+  return fromNullable(user.photo);
+}
+```
+
+### 4. Unit
+
+The `Unit` type represents the absence of a meaningful value (like `void`).
+
+#### Type Definition
+
+```ts
+type Unit = undefined;
+```
+
+#### Using Unit
+
+```ts
+// Side-effect operations that don't return data
+function logUserAccess(userId: string): Unit {
+  console.log(`User ${userId} accessed at ${new Date().toISOString()}`);
+  return undefined;
+}
+
+// In queries/mutations
+const logAccess = t.query({
+  args: z.object({}),
+  handler: async (ctx, args) => {
+    ctx.logger.info("API accessed", { userId: ctx.userId });
+    return success(undefined); // Result<Unit, Exception>
+  },
+});
+```
+
+## Advanced Monad Operations
+
+### map: Transform Success Values
+
+```ts
+// Result<T, E> -> Result<U, E>
+function map<T, U, E>(
+  result: Result<T, E>,
+  fn: (value: T) => U
+): Result<U, E> {
+  if (result.ok) {
+    return success(fn(result.value));
+  }
+  return result; // Errors pass through unchanged
+}
+
+// Usage
+const userResult = await api.getUser({ id: 1 });
+const nameResult = map(userResult, user => user.name);
+// Result<string, DatabaseError>
+```
+
+### flatMap/chain: Sequence Operations
+
+```ts
+// Result<T, E> -> Result<U, E> with function returning Result
+function flatMap<T, U, E>(
+  result: Result<T, E>,
+  fn: (value: T) => Result<U, E>
+): Result<U, E> {
+  if (result.ok) {
+    return fn(result.value);
+  }
+  return result; // Errors pass through unchanged
+}
+
+// Usage: Chain dependent operations
+const postsResult = flatMap(
+  await api.getUser({ id: 1 }),
+  (user) => api.getPosts({ userId: user.id })
+);
+// Result<Post[], DatabaseError>
+```
+
+### combine: Merge Multiple Results
+
+```ts
+// Combine multiple Results into one
+function combine<T extends Record<string, Result<any, any>>>(
+  results: T
+): Result<{ [K in keyof T]: T[K] extends Result<infer V, any> ? V : never }, any> {
+  const acc: Record<string, any> = {};
+
+  for (const [key, result] of Object.entries(results)) {
+    if (!result.ok) {
+      return result; // Return first error
+    }
+    acc[key] = result.value;
+  }
+
+  return success(acc);
+}
+
+// Usage
+const combined = combine({
+  user: await api.getUser({ id: 1 }),
+  settings: await api.getSettings({ userId: 1 }),
+  posts: await api.getPosts({ userId: 1 })
+});
+
+if (combined.ok) {
+  console.log(combined.value.user);
+  console.log(combined.value.settings);
+  console.log(combined.value.posts);
+}
+```
+
+### all: All or Nothing
+
+```ts
+// All succeed or all fail
+async function all<T extends Result<any, any>[]>(
+  results: [...T]
+): Result<{ [K in keyof T]: T[K] extends Result<infer V, any> ? V : never }, any> {
+  const values: any[] = [];
+
+  for (const result of results) {
+    if (!result.ok) {
+      return result; // Return first error
+    }
+    values.push(result.value);
+  }
+
+  return success(values as any);
+}
+
+// Usage
+const [users, posts] = await all([
+  api.getUsers(),
+  api.getPosts()
+]).unwrapOrThrow();
+```
+
+### race: First Success
+
+```ts
+// Return first success, or last error
+async function race<T extends Result<any, any>[]>(
+  results: T[]
+): Result<any, any> {
+  let lastError: any;
+
+  for (const result of results) {
+    if (result.ok) {
+      return result;
+    }
+    lastError = result.error;
+  }
+
+  return failure(lastError);
+}
+```
+
+## Monad Transformers
+
+### Handling Nested Monads
+
+When working with async operations that return Results, you get nested types:
+
+```ts
+// Problem: Nested monads
+async function fetchUser(id: number): Promise<Result<User, Error>> {
+  const user = await database.users.findById(id);
+  return user ? success(user) : failure(new Error("Not found"));
+}
+
+// This creates: Promise<Result<User, Error>>
+// Which is: AsyncResult<User, Error>
+```
+
+### The AsyncResult Pattern
+
+```ts
+// Use helper to avoid nesting
+async function withAsyncResult<T>(
+  fn: () => Promise<T>
+): AsyncResult<T, Exception> {
+  try {
+    const value = await fn();
+    return success(value);
+  } catch (error) {
+    return failure(exception({
+      name: error.constructor.name,
+      message: error.message,
+      stack: error.stack
+    }));
+  }
+}
+
+// Usage
+const result = await withAsyncResult(async () => {
+  const user = await database.users.findById(1);
+  if (!user) throw new Error("Not found");
+  return user;
+});
+```
+
+## Practical Patterns
+
+### Pattern 1: Validation Pipeline
+
+```ts
+import { z } from "zod";
+import { success, failure, exception } from "@deessejs/functions";
+
+// Validate request data
+function validateUserInput(data: unknown): Result<UserData, ValidationError> {
+  // First validation: email format
+  const emailResult = z.object({
+    email: z.string().email()
+  }).safeParse(data);
+
+  if (!emailResult.success) {
+    return failure({
+      field: "email",
+      message: "Invalid email format",
+      errors: emailResult.error.errors
+    });
+  }
+
+  // Second validation: age requirement
+  const ageResult = z.object({
+    age: z.number().min(18)
+  }).safeParse(data);
+
+  if (!ageResult.success) {
+    return failure({
+      field: "age",
+      message: "Must be 18 or older",
+      errors: ageResult.error.errors
+    });
+  }
+
+  // All validations passed
+  return success({
+    email: emailResult.data.email,
+    age: ageResult.data.age
+  });
+}
+```
+
+### Pattern 2: Database Transaction
+
+```ts
+// Transaction with rollback on error
+async function transferFunds(
+  fromId: number,
+  toId: number,
+  amount: number
+): AsyncResult<void, DatabaseError> {
+  return database.transaction(async (trx) => {
+    // Step 1: Debit
+    const fromAccount = await trx.accounts.findById(fromId);
+    if (!fromAccount) {
+      return failure({
+        code: "ACCOUNT_NOT_FOUND",
+        accountId: fromId
+      });
+    }
+
+    if (fromAccount.balance < amount) {
+      return failure({
+        code: "INSUFFICIENT_FUNDS",
+        balance: fromAccount.balance,
+        required: amount
+      });
+    }
+
+    await trx.accounts.update(fromId, {
+      balance: fromAccount.balance - amount
+    });
+
+    // Step 2: Credit
+    const toAccount = await trx.accounts.findById(toId);
+    if (!toAccount) {
+      return failure({
+        code: "ACCOUNT_NOT_FOUND",
+        accountId: toId
+      });
+    }
+
+    await trx.accounts.update(toId, {
+      balance: toAccount.balance + amount
+    });
+
+    return success(undefined);
+  });
+}
+```
+
+### Pattern 3: Fallback Values
+
+```ts
+// Try multiple sources in order
+async function getUserWithFallback(id: number): Promise<User> {
+  const cacheResult = await cache.get(`user:${id}`);
+  if (cacheResult.ok) {
+    return cacheResult.value;
+  }
+
+  const dbResult = await database.users.findById(id);
+  if (dbResult.ok) {
+    // Warm cache
+    await cache.set(`user:${id}`, dbResult.value, { ttl: 3600 });
+    return dbResult.value;
+  }
+
+  // Final fallback: create placeholder user
+  return {
+    id,
+    name: "Unknown User",
+    email: `user${id}@placeholder.com`
+  };
+}
+```
+
+### Pattern 4: Error Aggregation
+
+```ts
+// Collect multiple errors instead of failing fast
+async function validateBatch<T>(
+  items: T[],
+  validator: (item: T) => Result<any, ValidationError>
+): Result<T[], ValidationError[]> {
+  const validItems: T[] = [];
+  const errors: ValidationError[] = [];
+
+  for (const item of items) {
+    const result = validator(item);
+    if (result.ok) {
+      validItems.push(result.value);
+    } else {
+      errors.push(result.error);
+    }
+  }
+
+  if (errors.length > 0) {
+    return failure(errors);
+  }
+
+  return success(validItems);
+}
+```
+
+## Performance Considerations
+
+### Memory Allocation
+
+Monads allocate objects for every operation, which can add up:
+
+```ts
+// ❌ Creates many intermediate objects
+const result = success(5)
+  .map(x => x * 2)
+  .map(x => x + 1)
+  .map(x => x.toString());
+
+// ✅ Single transformation
+const result = success(((5 * 2) + 1).toString());
+```
+
+### Short-Circuit Evaluation
+
+```ts
+// chain short-circuits on error
+const result = await api.getUser({ id: 1 })
+  .chain(async (user) => {
+    // This won't run if getUser fails
+    return await api.getPosts({ userId: user.id });
+  })
+  .chain(async (posts) => {
+    // This won't run if getPosts fails
+    return await api.getComments({ postIds: posts.map(p => p.id) });
+  });
+```
+
+### Lazy Evaluation with Maybe
+
+```ts
+// Maybe allows lazy computation
+function getExpensiveReport(id: number): Maybe<Report> {
+  const user = findUser(id);
+  if (isNone(user)) {
+    return none; // Short-circuit, don't compute report
+  }
+
+  // Only compute report if user exists
+  return some(computeExpensiveReport(user.value));
+}
+```
+
+## Testing with Monads
+
+### Testing Success Paths
+
+```ts
+test("getUser returns user for valid ID", async () => {
+  const result = await api.getUser({ id: 1 });
+
+  expect(result.ok).toBe(true);
+  expect(result.value).toEqual({
+    id: 1,
+    name: "Alice"
+  });
+});
+```
+
+### Testing Error Paths
+
+```ts
+test("getUser returns error for invalid ID", async () => {
+  const result = await api.getUser({ id: 999 });
+
+  expect(result.ok).toBe(false);
+  expect(result.error.code).toBe("NOT_FOUND");
+});
+```
+
+### Testing Chains
+
+```ts
+test("user workflow chains operations correctly", async () => {
+  const result = await api.getUser({ id: 1 })
+    .chain(async (user) =>
+      api.getPosts({ userId: user.id })
+    );
+
+  expect(result.ok).toBe(true);
+  expect(result.value.length).toBeGreaterThan(0);
+});
+```
+
+## Common Pitfalls
+
+### Pitfall 1: Forgetting to Check ok
+
+```ts
+// ❌ Forgetting to check
+const result = await api.getUser({ id: 1 });
+console.log(result.value.name); // Runtime error if result.ok is false
+
+// ✅ Always check
+const result = await api.getUser({ id: 1 });
+if (result.ok) {
+  console.log(result.value.name);
+}
+```
+
+### Pitfall 2: Ignoring Errors
+
+```ts
+// ❌ Swallowing errors
+const result = await api.getUser({ id: 1 });
+if (!result.ok) {
+  return; // Error is lost
+}
+process(result.value);
+
+// ✅ Propagate or log errors
+const result = await api.getUser({ id: 1 });
+if (!result.ok) {
+  logger.error("Failed to get user", { error: result.error });
+  return result; // Propagate error
+}
+process(result.value);
+```
+
+### Pitfall 3: Mixing null with Maybe
+
+```ts
+// ❌ Mixing patterns
+function findUser(id: number): Maybe<User> {
+  const user = db.users.find(id);
+  if (user) return some(user);
+  return none(); // But user.value could still be null!
+}
+
+// ✅ Use fromNullable
+function findUser(id: number): Maybe<User> {
+  return fromNullable(db.users.find(id));
+}
+
+// Or ensure non-null
+function findUser(id: number): Maybe<User> {
+  const user = db.users.find(id);
+  if (!user) return none();
+  return some(user); // user is guaranteed non-null here
+}
+```
+
+## When NOT to Use Monads
+
+### Simple Values
+
+```ts
+// ❌ Overkill for simple values
+function add(a: number, b: number): Result<number, never> {
+  return success(a + b);
+}
+
+// ✅ Just return the value
+function add(a: number, b: number): number {
+  return a + b;
+}
+```
+
+### Internal Functions
+
+```ts
+// ❌ Monads in private implementation
+function processUser(user: User): Result<ProcessedUser, Error> {
+  // Internal processing logic
+}
+
+// ✅ Use monads at boundaries
+function processUser(user: User): ProcessedUser {
+  // Internal processing, throws are ok here
+}
+
+// Public API uses monads
+const apiProcessUser = t.query({
+  args: userSchema,
+  handler: async (ctx, args) => {
+    try {
+      return success(processUser(args));
+    } catch (error) {
+      return failure(exception(error));
+    }
+  }
+});
+```
+
+## Summary
+
+Monads in DeesseJS Functions provide:
+
+- **Type Safety**: Compiler tracks what can go wrong
+- **Composability**: Chain operations safely
+- **Explicit Errors**: No surprise exceptions
+- **Functional**: Pure functions, easy to test
+
+### Key Takeaways
+
+1. **Result<T, E>**: Use for operations that can fail with known errors
+2. **AsyncResult<T, E>**: Async version of Result
+3. **Maybe\<T>**: Use for optional values
+4. **Unit**: Use for functions with no return value
+5. **map**: Transform success values
+6. **chain/flatMap**: Sequence operations that return monads
+7. **combine/all**: Merge multiple monads
+
+### Further Reading
+
+- [Result API Reference](/docs/types/result)
+- [AsyncResult API Reference](/docs/types/async-result)
+- [Maybe API Reference](/docs/types/maybe)
+- [Error Handling Guide](/docs/error-handling)
