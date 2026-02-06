@@ -1,0 +1,65 @@
+---
+title: Understanding Monads
+description: Deep dive into monads and functional programming patterns
+---
+
+# Understanding Monads
+
+Monads are a design pattern from functional programming that helps manage side effects, errors, and optional values in a type-safe way.
+
+## What is a Monad?
+
+A monad is a design pattern that wraps a value and provides two operations:
+
+1. Return or Unit: Wrap a value in the monad
+2. Bind or FlatMap: Transform the wrapped value
+
+## Why Monads Matter
+
+Monads allow you to:
+- Handle errors explicitly
+- Chain operations safely
+- Manage side effects
+- Maintain type safety
+
+## Result Type
+
+The Result type represents operations that can succeed or fail.
+
+## Async Result
+
+AsyncResult is Promise of Result.
+
+## Maybe Type
+
+The Maybe type represents optional values.
+
+## Unit Type
+
+The Unit type represents functions with no meaningful return value.
+
+## Creating Values
+
+```ts
+import { success } from "@deessejs/functions";
+
+const result = success({ id: 1, name: "Alice" });
+```
+
+## Utility Functions
+
+### map
+
+Transform the value.
+
+### chain
+
+Chain operations that return Results.
+
+### unwrapOr
+
+Get the value or a default.
+
+## Related Documentation
+
+- [Result API Reference](/docs/types/result)
