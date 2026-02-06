@@ -1,0 +1,118 @@
+---
+title: Quick Start
+description: Get up and running with DeesseJS Functions in 5 minutes
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Quick Start
+
+Get up and running with DeesseJS Functions in under 5 minutes.
+
+## Installation
+
+Install the package using your favorite package manager:
+
+```bash
+npm install @deessejs/functions
+# or
+yarn add @deessejs/functions
+# or
+pnpm add @deessejs/functions
+```
+
+## Your First API
+
+Create a file `api.ts` and add the following code:
+
+```ts
+import { defineContext, success } from "@deessejs/functions";
+import z from "zod";
+
+// 1. Define your context (single source of truth)
+const { t, createAPI } = defineContext<{
+  userId: string;
+  database: any;
+}>({
+  userId: "user-123",
+  database: myDatabase
+});
+
+// 2. Create a query (read operation)
+const getUser = t.query({
+  args: z.object({
+    id: z.number(),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.findById(args.id);
+
+    if (!user) {
+      return {
+        ok: false,
+        error: {
+          name: "NotFound",
+          message: `User ${args.id} not found`,
+        },
+      };
+    }
+
+    return success(user);
+  },
+});
+
+// 3. Create a mutation (write operation)
+const createUser = t.mutation({
+  args: z.object({
+    name: z.string().min(2),
+    email: z.string().email(),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.database.users.create({
+      name: args.name,
+      email: args.email,
+      createdBy: ctx.userId,
+    });
+
+    return success(user);
+  },
+});
+
+// 4. Create the API
+const api = createAPI({ getUser, createUser });
+
+// 5. Use it!
+async function main() {
+  // Get a user
+  const userResult = await api.getUser({ id: 1 });
+
+  if (userResult.ok) {
+    console.log("User found:", userResult.value);
+  } else {
+    console.error("Error:", userResult.error.message);
+  }
+
+  // Create a user
+  const createResult = await api.createUser({
+    name: "Alice",
+    email: "alice@example.com",
+  });
+
+  if (createResult.ok) {
+    console.log("User created:", createResult.value);
+  }
+}
+```
+
+<Callout type="info" title="What's happening here?">
+- **Context**: Defined once, available to all handlers
+- **Query**: Read-only operation that fetches a user
+- **Mutation**: Write operation that creates a user
+- **Result**: Every operation returns `{ ok: boolean, value?: T, error?: Error }`
+</Callout>
+
+## What's Next?
+
+- **[Context](/docs/context)** - Learn how to manage shared data
+- **[Queries & Mutations](/docs/queries-mutations)** - Deep dive into operations
+- **[Router](/docs/router)** - Organize your API endpoints
+- **[Error Handling](/docs/error-handling)** - Handle errors gracefully

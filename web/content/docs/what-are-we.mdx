@@ -1,0 +1,180 @@
+---
+title: What are DeesseJS Functions
+description: Understand what DeesseJS Functions is and why it exists
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+
+# What are DeesseJS Functions?
+
+**DeesseJS Functions** is a TypeScript library for building type-safe APIs with a focus on simplicity, context management, and developer experience.
+
+## The Problem
+
+Building type-safe APIs today often means choosing between:
+
+- **Complex type-level programming** - HKTs, complex generics, "Type instantiation is excessively deep" errors
+- **Runtime uncertainty** - Any types, loose validation, runtime errors that should have been caught at compile time
+- ** scattered business logic** - Context passed around manually, middleware hell, duplicated code
+
+## The Solution
+
+DeesseJS Functions takes a different approach:
+
+### 1. **Simple Types, Full Safety**
+
+No complex type machinery. Standard TypeScript generics that just work:
+
+```ts
+const getUser = t.query({
+  args: z.object({ id: z.number() }),
+  handler: async (ctx, args) => {
+    return success({ id: args.id, name: "Alice" });
+  },
+});
+
+// Fully typed! ✅
+const result = await api.getUser({ id: 1 });
+
+if (result.ok) {
+  console.log(result.value.name); // TypeScript knows this is string
+}
+```
+
+### 2. **Single Source of Truth**
+
+Define context once, use it everywhere:
+
+```ts
+const { t, createAPI } = defineContext<{
+  userId: string;
+  database: Database;
+  logger: Logger;
+}>({
+  userId: "user-123",
+  database: myDatabase,
+  logger: myLogger,
+});
+
+// Context available in all handlers
+const createUser = t.mutation({
+  args: z.object({ name: z.string() }),
+  handler: async (ctx, args) => {
+    ctx.logger.info("Creating user", { name: args.name });
+    return success(await ctx.database.users.create(args));
+  },
+});
+```
+
+### 3. **Explicit Error Handling**
+
+No more uncaught exceptions. Every operation returns a result:
+
+```ts
+const result = await api.getUser({ id: 1 });
+
+if (!result.ok) {
+  // Always handle errors explicitly
+  return { error: result.error.message };
+}
+
+return { user: result.value };
+```
+
+<Callout type="info" title="Outcome Types">
+DeesseJS Functions uses outcome types instead of exceptions for error handling.
+This forces you to handle errors explicitly and makes your code more predictable.
+</Callout>
+
+## Core Principles
+
+### Functional Programming
+
+- **No classes** - Functions and composition over OOP
+- **No interfaces** - Type aliases for structural typing
+- **Immutable** - Data never changes, create new data instead
+- **Composable** - Small functions combined into complex ones
+
+### Type Safety First
+
+- **Zod validation** - Runtime type checking with zero cost
+- **End-to-end types** - From database to frontend
+- **No `any`** - Except where you explicitly choose it
+- **Compiler as friend** - TypeScript helps, not hinders
+
+### Developer Experience
+
+- **Zero config** - Works out of the box
+- **Clear errors** - Helpful error messages
+- **Simple mental model** - Easy to reason about
+- **Predictable** - Same input = same output
+
+## What It's Not
+
+DeesseJS Functions is **not**:
+
+- ❌ A replacement for Express/Fastify (it's not an HTTP server)
+- ❌ A tRPC clone (different architecture, simpler types)
+- ❌ A React Query alternative (it's backend-focused)
+- ❌ An ORM (works with any database)
+- ❌ A framework (it's a library you can adopt gradually)
+
+<Callout type="warning" title="What about HTTP?">
+DeesseJS Functions doesn't handle HTTP directly. Instead, it provides a type-safe
+layer that you can integrate with any HTTP framework (Express, Next.js, Fastify, etc.).
+This keeps the library focused and composable.
+</Callout>
+
+## When to Use DeesseJS Functions
+
+### Perfect For ✅
+
+- **TypeScript backends** - Full-stack TypeScript projects
+- **Microservices** - Small, focused APIs
+- **GraphQL replacements** - Type-safe APIs without GraphQL complexity
+- **tRPC alternatives** - Simpler types, same benefits
+- **Serverless functions** - AWS Lambda, Vercel Functions, etc.
+- **Internal APIs** - Backend-to-backend communication
+
+### Not Ideal For ❌
+
+- **Simple CRUD apps** - Might be overkill for basic APIs
+- **JavaScript projects** - Requires TypeScript for type safety
+- **Public APIs** - Designed for internal use first
+- **REST purists** - Different philosophy than REST
+
+## The Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    Your Application                 │
+│  (Next.js, Express, React, Vue, Vanilla, etc.)     │
+└─────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────┐
+│              DeesseJS Functions API                 │
+│  • Type-safe queries & mutations                    │
+│  • Context management                               │
+│  • Error handling                                   │
+│  • Validation (Zod)                                 │
+└─────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────┐
+│                  Data Layer                         │
+│  • Database (PostgreSQL, MongoDB, etc.)             │
+│  • External APIs                                    │
+│  • File system                                      │
+│  • Cache                                            │
+└─────────────────────────────────────────────────────┘
+```
+
+## What's Next?
+
+Ready to dive deeper? Check out:
+
+- **[Quick Start](/docs/quick-start)** - Get started in 5 minutes
+- **[Comparisons](/docs/comparisons)** - See how we compare to alternatives
+- **[Context](/docs/context)** - Learn about context management

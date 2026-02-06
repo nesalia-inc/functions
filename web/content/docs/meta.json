@@ -5,8 +5,9 @@
     "root": true,
     "pages": [
         "---Getting Started---",
-        "index",
-        "getting-started",
+        "quick-start",
+        "what-are-we",
+        "comparisons",
         "---Core Concepts---",
         "context",
         "queries-mutations",
